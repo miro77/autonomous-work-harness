@@ -1,0 +1,12 @@
+# Local runtime state (gate proof, kick-loop lock/log, compaction log) —
+# machine-local and regenerated; never committed.
+.harness/
+
+# Python bytecode cache from the optional GUI tools
+__pycache__/
+*.pyc
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp

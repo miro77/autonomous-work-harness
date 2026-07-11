@@ -1,0 +1,14 @@
+# Shell scripts and the harness config MUST stay LF — CRLF breaks bash
+# execution (the `\r` becomes part of commands/paths) on checkout.
+*.sh        text eol=lf
+harness.env text eol=lf
+*.env       text eol=lf
+
+# Keep the rest normalized to LF too; the scripts and docs assume it.
+*.md        text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.py        text eol=lf
+.gitignore  text eol=lf
+.gitkeep    text eol=lf
