@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness prompt generator</title>
+<style>
+  /* ---- Tokens ------------------------------------------------------ */
+  :root {
+    --ground:   #eef0f4;
+    --surface:  #ffffff;
+    --field:    #f6f7fb;
+    --ink:      #191c22;
+    --muted:    #5d6675;
+    --faint:    #8b93a3;
+    --border:   #d9dde6;
+    --border-strong: #c3c9d6;
+    --accent:   #3a55c8;
+    --accent-soft: #eaeeff;
+    --accent-ink: #ffffff;
+    --danger:   #c2413a;
+    /* terminal card — deliberately dark in both themes */
+    --term-bg:  #0f1218;
+    --term-panel: #171b23;
+    --term-ink: #d8dce6;
+    --term-faint: #6b7686;
+    --term-accent: #8ea2ff;
+    --term-border: #262c38;
+
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    --maxw: 1120px;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:   #0f1117;
+      --surface:  #171a21;
+      --field:    #1d212a;
+      --ink:      #e7e9ee;
+      --muted:    #99a2b1;
+      --faint:    #69707f;
+      --border:   #2a2f3a;
+      --border-strong: #39404d;
+      --accent:   #8298ff;
+      --accent-soft: #1f2740;
+      --accent-ink: #0f1218;
+      --danger:   #e0736c;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground:#eef0f4; --surface:#ffffff; --field:#f6f7fb; --ink:#191c22;
+    --muted:#5d6675; --faint:#8b93a3; --border:#d9dde6; --border-strong:#c3c9d6;
+    --accent:#3a55c8; --accent-soft:#eaeeff; --accent-ink:#ffffff; --danger:#c2413a;
+  }
+  :root[data-theme="dark"] {
+    --ground:#0f1117; --surface:#171a21; --field:#1d212a; --ink:#e7e9ee;
+    --muted:#99a2b1; --faint:#69707f; --border:#2a2f3a; --border-strong:#39404d;
+    --accent:#8298ff; --accent-soft:#1f2740; --accent-ink:#0f1218; --danger:#e0736c;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: clamp(1.25rem, 4vw, 3rem) clamp(1rem, 4vw, 2rem) 3rem; }
+
+  /* ---- Header ------------------------------------------------------ */
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1rem; margin-bottom: .35rem; }
+  .eyebrow {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent); font-weight: 600;
+  }
+  h1 {
+    font-family: var(--mono); font-weight: 600; font-size: clamp(1.5rem, 3.6vw, 2.15rem);
+    letter-spacing: -.01em; margin: .1rem 0 0; text-wrap: balance; flex: 1 1 auto;
+  }
+  .repo-link {
+    font-family: var(--mono); font-size: .78rem; color: var(--muted);
+    text-decoration: none; border-bottom: 1px solid var(--border-strong); padding-bottom: 1px;
+    white-space: nowrap;
+  }
+  .repo-link:hover { color: var(--accent); border-color: var(--accent); }
+  .lead { color: var(--muted); max-width: 68ch; margin: .6rem 0 0; font-size: 1rem; }
+
+  /* ---- Two-pane layout -------------------------------------------- */
+  .panes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(1rem, 3vw, 2rem); margin-top: clamp(1.5rem, 4vw, 2.4rem); align-items: start; }
+  @media (max-width: 860px) { .panes { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: clamp(1.1rem, 3vw, 1.6rem);
+  }
+  .panel-title {
+    font-family: var(--mono); font-size: .74rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--faint); font-weight: 600; margin: 0 0 1rem;
+  }
+
+  /* ---- Mode selector ---------------------------------------------- */
+  .modes { display: grid; gap: .6rem; margin-bottom: 1.5rem; }
+  .mode {
+    display: grid; grid-template-columns: auto 1fr; gap: .1rem .8rem; align-items: start;
+    border: 1px solid var(--border); border-radius: 8px; padding: .75rem .9rem;
+    cursor: pointer; transition: border-color .12s, background .12s;
+    background: var(--field);
+  }
+  .mode:hover { border-color: var(--border-strong); }
+  .mode input { grid-row: 1 / 3; align-self: center; accent-color: var(--accent); width: 1.05rem; height: 1.05rem; }
+  .mode .m-name { font-weight: 600; font-size: .95rem; }
+  .mode .m-desc { grid-column: 2; color: var(--muted); font-size: .84rem; line-height: 1.4; }
+  .mode:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .mode:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---- Fields ------------------------------------------------------ */
+  .fields[hidden] { display: none; }
+  .field { display: grid; gap: .3rem; margin-bottom: 1rem; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600;
+  }
+  .field input {
+    font-family: var(--mono); font-size: .9rem; color: var(--ink);
+    background: var(--field); border: 1px solid var(--border); border-radius: 7px;
+    padding: .55rem .7rem; width: 100%;
+  }
+  .field input::placeholder { color: var(--faint); }
+  .field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+  .field select {
+    font-family: var(--mono); font-size: .9rem; color: var(--ink);
+    background: var(--field); border: 1px solid var(--border); border-radius: 7px;
+    padding: .55rem .7rem; width: 100%; cursor: pointer;
+  }
+  .field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+  .field .hint { font-size: .76rem; color: var(--faint); }
+  .field .hint code { font-family: var(--mono); color: var(--muted); }
+
+  /* ---- Terminal output card --------------------------------------- */
+  .term {
+    background: var(--term-bg); border: 1px solid var(--term-border); border-radius: var(--radius);
+    overflow: hidden; position: sticky; top: 1rem;
+  }
+  @media (max-width: 860px) { .term { position: static; } }
+  .term-bar {
+    display: flex; align-items: center; gap: .6rem;
+    padding: .6rem .8rem; background: var(--term-panel); border-bottom: 1px solid var(--term-border);
+  }
+  .dots { display: flex; gap: .4rem; }
+  .dots i { width: .68rem; height: .68rem; border-radius: 50%; background: #3a4150; display: block; }
+  .term-name {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--term-faint); font-weight: 600;
+  }
+  .copy {
+    margin-left: auto; font-family: var(--mono); font-size: .78rem; font-weight: 600;
+    color: var(--accent-ink); background: var(--accent); border: 0; border-radius: 6px;
+    padding: .4rem .8rem; cursor: pointer; transition: filter .12s, transform .05s;
+  }
+  .copy:hover { filter: brightness(1.08); }
+  .copy:active { transform: translateY(1px); }
+  .copy:focus-visible { outline: 2px solid var(--term-accent); outline-offset: 2px; }
+  .copy.ok { background: #2f9e57; }
+
+  pre.out {
+    margin: 0; padding: 1.1rem 1.1rem 1.3rem; overflow-x: auto;
+    font-family: var(--mono); font-size: .82rem; line-height: 1.7; color: var(--term-ink);
+    white-space: pre-wrap; word-break: break-word; tab-size: 2;
+  }
+  pre.out .ph { color: var(--term-accent); }  /* unfilled <...> placeholders */
+
+  .note {
+    margin-top: 1.4rem; padding-top: 1.1rem; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: .84rem; max-width: 74ch;
+  }
+  .note strong { color: var(--ink); font-weight: 600; }
+  .note code { font-family: var(--mono); font-size: .82em; color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div style="flex:1 1 auto">
+      <div class="eyebrow">Autonomous work harness</div>
+      <h1>Prompt generator</h1>
+    </div>
+    <a class="repo-link" href="https://github.com/miro77/autonomous-work-harness" target="_blank" rel="noopener">github.com/miro77/autonomous-work-harness ↗</a>
+  </header>
+  <p class="lead">
+    Tick the kind of work you're starting and fill in your stack. It assembles the
+    exact starting prompt to paste into a fresh Claude&nbsp;Code session at your
+    repo root. Leave a field blank and it stays a <code>&lt;placeholder&gt;</code>
+    for Claude to fill during Phase&nbsp;0.
+  </p>
+
+  <div class="panes">
+    <!-- Left: form -->
+    <section class="card" aria-label="Configure">
+      <p class="panel-title">1 · What are you doing?</p>
+      <div class="modes" role="radiogroup" aria-label="Migration type">
+        <label class="mode">
+          <input type="radio" name="mode" value="freeze" checked>
+          <span class="m-name">Freeze-and-replace migration</span>
+          <span class="m-desc">Old code stays in the repo as a live oracle; the new implementation is built beside it and matched against captured fixtures.</span>
+        </label>
+        <label class="mode">
+          <input type="radio" name="mode" value="inplace">
+          <span class="m-name">In-place migration</span>
+          <span class="m-desc">You edit the existing tree directly — swap a dependency or framework — while preserving observable behavior. No separate frozen legacy.</span>
+        </label>
+        <label class="mode">
+          <input type="radio" name="mode" value="feature">
+          <span class="m-name">New feature (spec-driven)</span>
+          <span class="m-desc">No legacy oracle. Correctness comes from a written spec plus acceptance tests, tracked in the spec matrix.</span>
+        </label>
+      </div>
+
+      <p class="panel-title">2 · Your stack</p>
+
+      <!-- Freeze fields -->
+      <div class="fields" data-mode="freeze">
+        <div class="field">
+          <label for="f-sys">Legacy system / module</label>
+          <input id="f-sys" placeholder="&lt;legacy system/module&gt;">
+        </div>
+        <div class="field">
+          <label for="f-lstack">Legacy stack</label>
+          <input id="f-lstack" placeholder="&lt;legacy stack&gt;">
+        </div>
+        <div class="field">
+          <label for="f-tstack">Target stack</label>
+          <input id="f-tstack" placeholder="&lt;target stack&gt;">
+        </div>
+        <div class="field">
+          <label for="f-tpaths">Target paths <span style="text-transform:none;color:var(--faint)">(new code)</span></label>
+          <input id="f-tpaths" placeholder="&lt;target-paths&gt;">
+          <span class="hint">e.g. <code>src</code> or <code>app/src</code></span>
+        </div>
+        <div class="field">
+          <label for="f-lpaths">Legacy paths <span style="text-transform:none;color:var(--faint)">(frozen oracle)</span></label>
+          <input id="f-lpaths" placeholder="&lt;legacy-paths&gt;">
+          <span class="hint">e.g. <code>legacy/src</code></span>
+        </div>
+        <div class="field">
+          <label for="f-gate">Gate command</label>
+          <input id="f-gate" placeholder="&lt;format/lint/type/test command&gt;">
+          <span class="hint">the full real project checks, e.g. <code>npm run lint && npm test</code></span>
+        </div>
+      </div>
+
+      <!-- In-place fields -->
+      <div class="fields" data-mode="inplace" hidden>
+        <div class="field">
+          <label for="i-spaths">Source paths <span style="text-transform:none;color:var(--faint)">(edited in place)</span></label>
+          <input id="i-spaths" placeholder="&lt;source-paths&gt;">
+          <span class="hint">e.g. <code>src</code></span>
+        </div>
+        <div class="field">
+          <label for="i-old">From <span style="text-transform:none;color:var(--faint)">(old dep / framework / runtime)</span></label>
+          <input id="i-old" placeholder="&lt;old dependency/framework/runtime&gt;">
+        </div>
+        <div class="field">
+          <label for="i-new">To <span style="text-transform:none;color:var(--faint)">(new dep / framework / runtime)</span></label>
+          <input id="i-new" placeholder="&lt;new dependency/framework/runtime&gt;">
+        </div>
+        <div class="field">
+          <label for="i-gate">Gate command</label>
+          <input id="i-gate" placeholder="&lt;format/lint/type/test command&gt;">
+          <span class="hint">the full real project checks, e.g. <code>make check</code></span>
+        </div>
+      </div>
+
+      <!-- Feature fields -->
+      <div class="fields" data-mode="feature" hidden>
+        <div class="field">
+          <label for="x-feat">Feature name</label>
+          <input id="x-feat" placeholder="&lt;feature name&gt;">
+        </div>
+        <div class="field">
+          <label for="x-users">For <span style="text-transform:none;color:var(--faint)">(users / callers)</span></label>
+          <input id="x-users" placeholder="&lt;users/callers&gt;">
+        </div>
+        <div class="field">
+          <label for="x-spaths">Source paths</label>
+          <input id="x-spaths" placeholder="&lt;source-paths&gt;">
+          <span class="hint">e.g. <code>src</code></span>
+        </div>
+        <div class="field">
+          <label for="x-gate">Gate command</label>
+          <input id="x-gate" placeholder="&lt;format/lint/type/test command&gt;">
+          <span class="hint">existing suite + new acceptance tests, e.g. <code>pytest</code></span>
+        </div>
+      </div>
+
+      <p class="panel-title" style="margin-top:1.6rem">3 · Unattended drive</p>
+      <div class="modes" role="radiogroup" aria-label="Split handling">
+        <label class="mode">
+          <input type="radio" name="split" value="auto" checked>
+          <span class="m-name">Split automatically</span>
+          <span class="m-desc">When a row is too big, the tick splits it into sub-rows, commits, and ends — the next fresh tick implements them. The run keeps going unattended (the harness default).</span>
+        </label>
+        <label class="mode">
+          <input type="radio" name="split" value="human">
+          <span class="m-name">Pause for review after a split</span>
+          <span class="m-desc">After a split commit, stop the whole run and flag the proposed sub-rows in HANDOFF.md so you approve them before implementation resumes.</span>
+        </label>
+      </div>
+
+      <p class="panel-title" style="margin-top:1.6rem">4 · Model strategy <span style="text-transform:none;letter-spacing:0;color:var(--faint)">optional</span></p>
+      <div class="field">
+        <label for="model">Which models run the work?</label>
+        <select id="model">
+          <option value="">Session default — one model everywhere</option>
+          <option value="split">Split: Sonnet build · Opus audit + plan (recommended)</option>
+          <option value="opusplan">opusplan hybrid — leans interactive</option>
+          <option value="opus">All Opus — max quality</option>
+          <option value="haiku">All Haiku — cheapest &amp; fastest</option>
+        </select>
+        <span class="hint">Adds a model-wiring line to the prompt. The auditor subagents already ship pinned to Opus.</span>
+      </div>
+    </section>
+
+    <!-- Right: output -->
+    <section class="term" aria-label="Generated prompt">
+      <div class="term-bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="term-name">Starting prompt</span>
+        <button class="copy" id="copy" type="button">Copy</button>
+      </div>
+      <pre class="out" id="out" tabindex="0"></pre>
+    </section>
+  </div>
+
+  <p class="note">
+    <strong>This generates a prompt, not harness code.</strong> The harness itself
+    ships as a copy-in template — that stays the source of truth. This tool just
+    assembles the right paste-in starting prompt (the same ones documented in
+    <code>README.md</code>) and fills the placeholders you know. Everything the
+    prompt asks Claude to configure — <code>harness.env</code>,
+    <code>gates.sh</code>, <code>CLAUDE.md</code> — still happens against the real
+    template.
+  </p>
+</div>
+
+<script>
+(function () {
+  var URL = "https://github.com/miro77/autonomous-work-harness";
+
+  // Read an input's trimmed value, or fall back to its <placeholder>.
+  function val(id) {
+    var el = document.getElementById(id);
+    var v = (el.value || "").trim();
+    return v || el.getAttribute("placeholder");
+  }
+
+  var templates = {
+    freeze: function () {
+      return "Install and configure the migration harness from\n" +
+        URL + " for this repository.\n\n" +
+        "Goal: migrate " + val("f-sys") + " from " + val("f-lstack") + " to " + val("f-tstack") + " by\n" +
+        "building the new implementation in " + val("f-tpaths") + " while keeping " + val("f-lpaths") + "\n" +
+        "as the frozen executable oracle.\n\n" +
+        "Set HARNESS_SCOPE to \"" + val("f-tpaths") + " migration .claude CLAUDE.md AGENTS.md\".\n" +
+        "Set HARNESS_FROZEN to \"" + val("f-lpaths") + "\". Configure migration/tools/gates.sh to\n" +
+        "run the full real project checks: " + val("f-gate") + ".\n\n" +
+        "Fill CLAUDE.md, migration/PLAN.md, migration/legacy-runtime.md, and\n" +
+        "migration/parity-matrix.md. Phase 0 should inventory the legacy units, define\n" +
+        "fixture probes, and split the migration into one observable parity row per\n" +
+        "slice. Do not implement migration slices until the harness config and gates are\n" +
+        "working.";
+    },
+    inplace: function () {
+      return "Configure the migration harness from\n" +
+        URL + " for an in-place migration.\n\n" +
+        "Goal: transform " + val("i-spaths") + " from " + val("i-old") + " to\n" +
+        val("i-new") + " without changing observable behavior.\n\n" +
+        "Set HARNESS_SCOPE to \"" + val("i-spaths") + " migration .claude CLAUDE.md AGENTS.md\".\n" +
+        "Leave HARNESS_FROZEN empty because there is no separate legacy tree to freeze.\n" +
+        "Before editing each unit, capture its current behavior as fixtures from the base\n" +
+        "commit using probes in migration/fixtures/ or probes/. Configure\n" +
+        "migration/tools/gates.sh to run the full real project checks:\n" +
+        val("i-gate") + ".\n\n" +
+        "Fill CLAUDE.md and migration/parity-matrix.md so each row names one behavior to\n" +
+        "preserve, the fixture/probe that captures it, and the source paths to edit.\n" +
+        "Work one row at a time; no success claim without gates and fresh-context audit.";
+    },
+    feature: function () {
+      return "Use the feature profile of the harness from\n" +
+        URL + " to build " + val("x-feat") + ".\n\n" +
+        "Goal: add " + val("x-feat") + " for " + val("x-users") + ". Correctness is the written spec,\n" +
+        "not legacy parity.\n\n" +
+        "Rename template/CLAUDE-feature.md to CLAUDE.md. Use migration/spec-matrix.md as\n" +
+        "the status board and leave HARNESS_FROZEN empty. Set HARNESS_SCOPE to\n" +
+        "\"" + val("x-spaths") + " migration .claude CLAUDE.md AGENTS.md\". Configure\n" +
+        "migration/tools/gates.sh to run the full existing suite plus the new acceptance\n" +
+        "tests: " + val("x-gate") + ".\n\n" +
+        "During Phase 0, break the feature into one row per observable acceptance\n" +
+        "criterion. Write or name the acceptance test for each row before implementation.\n" +
+        "Use spec-auditor for fresh-context audits. Keep the existing suite green on\n" +
+        "every slice.";
+    }
+  };
+
+  // Appended only for the human-gated split policy — an override of the harness
+  // default (which lets the unattended drive flow into sub-rows across ticks).
+  var SPLIT_HUMAN =
+    "\n\nSplit policy: if a slice is split-required, split it into sub-rows and commit\n" +
+    "the split as usual, then treat that split as a clean TERMINATION-style stop —\n" +
+    "write migration/HANDOFF.md listing the proposed sub-rows for review and end the\n" +
+    "run. Do NOT park mid-tick waiting for input, and do not implement the sub-rows\n" +
+    "until a human has approved them and resumed the drive. (By default the run would\n" +
+    "continue into the sub-rows on the next fresh tick without stopping.)";
+
+  // Model-wiring line appended per strategy. "" (session default) adds nothing,
+  // keeping the default output identical to the canonical README prompts.
+  var MODEL = {
+    "": "",
+    split:
+      "\n\nModel strategy (split): run implementation slices on Sonnet — set model to\n" +
+      "sonnet in settings.json, or pass --model sonnet to the driver. Keep the\n" +
+      "parity-auditor, spec-auditor and legacy-analyst subagents pinned to Opus (the\n" +
+      "model: field in .claude/agents/*.md) so the fresh-context audit stays sharp. Run\n" +
+      "Phase 0 — inventory, slicing, matrix — once on Opus (--model opus) before driving.",
+    opusplan:
+      "\n\nModel strategy (opusplan): set the session model to opusplan so implementation\n" +
+      "runs on Sonnet and Opus is consulted for planning. Note opusplan's planning\n" +
+      "escalation is tuned for interactive plan mode and is less predictable in headless\n" +
+      "--drive runs; prefer the explicit split for unattended use.",
+    opus:
+      "\n\nModel strategy: run implementation and the auditor subagents on Opus (--model\n" +
+      "opus, or model opus in settings.json). Highest quality, highest cost.",
+    haiku:
+      "\n\nModel strategy: run implementation on Haiku (--model haiku) for the fastest,\n" +
+      "cheapest passes, leaning on the gates and fixtures as the safety net. Keep the\n" +
+      "auditor subagents on Opus (model: opus in .claude/agents/*.md) so correctness\n" +
+      "review stays strong."
+  };
+
+  var out = document.getElementById("out");
+
+  function currentMode() {
+    return document.querySelector('input[name="mode"]:checked').value;
+  }
+  function currentSplit() {
+    return document.querySelector('input[name="split"]:checked').value;
+  }
+  function currentModel() {
+    return document.getElementById("model").value;
+  }
+
+  // Render into <pre>, highlighting any remaining <...> placeholders.
+  function render() {
+    var text = templates[currentMode()]();
+    text += MODEL[currentModel()] || "";
+    if (currentSplit() === "human") text += SPLIT_HUMAN;
+    out.textContent = "";
+    var re = /<[^>\n]+>/g, last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) out.appendChild(document.createTextNode(text.slice(last, m.index)));
+      var span = document.createElement("span");
+      span.className = "ph";
+      span.textContent = m[0];
+      out.appendChild(span);
+      last = re.lastIndex;
+    }
+    if (last < text.length) out.appendChild(document.createTextNode(text.slice(last)));
+  }
+
+  // Swap visible fieldset with the mode.
+  function syncFields() {
+    var mode = currentMode();
+    document.querySelectorAll(".fields").forEach(function (f) {
+      f.hidden = f.getAttribute("data-mode") !== mode;
+    });
+  }
+
+  document.addEventListener("input", render);
+  document.querySelectorAll('input[name="mode"]').forEach(function (r) {
+    r.addEventListener("change", function () { syncFields(); render(); });
+  });
+  document.querySelectorAll('input[name="split"]').forEach(function (r) {
+    r.addEventListener("change", render);
+  });
+  document.getElementById("model").addEventListener("change", render);
+
+  var copyBtn = document.getElementById("copy");
+  copyBtn.addEventListener("click", function () {
+    var text = out.textContent;
+    var done = function () {
+      copyBtn.textContent = "Copied ✓";
+      copyBtn.classList.add("ok");
+      setTimeout(function () { copyBtn.textContent = "Copy"; copyBtn.classList.remove("ok"); }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else { fallback(); }
+    function fallback() {
+      var r = document.createRange(); r.selectNodeContents(out);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      try { document.execCommand("copy"); done(); } catch (e) {}
+      sel.removeAllRanges();
+    }
+  });
+
+  syncFields();
+  render();
+})();
+</script>
+</body>
+</html>
