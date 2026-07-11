@@ -433,9 +433,11 @@ GATE
 cd /; rm -rf "$R"
 
 # ============================================================ kick-loop --review flag
+# mkfake/KL are reused from the stub block above — they resolve $FAKEBIN at
+# call time, so pointing it at this repo's .fakebin is enough. Do NOT redefine
+# them here: shellcheck errors on a use that precedes a later redefinition
+# (SC2218), which is exactly what broke CI once before.
 R="$(mkrepo 'src')"; cd "$R"; mkdir -p .fakebin; FAKEBIN="$PWD/.fakebin"
-mkfake(){ cat > "$FAKEBIN/claude"; chmod +x "$FAKEBIN/claude"; }
-KL(){ ( PATH="$FAKEBIN:$PATH" bash migration/tools/kick-loop.sh "$@" ); }
 # --review with --drive: an audited-fail commit should trigger the REVIEW
 # message. The fake claude commits audited-fail on the first tick and writes
 # HANDOFF on the second, so the review check fires between them (after tick 1,
