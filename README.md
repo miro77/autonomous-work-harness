@@ -62,9 +62,12 @@ self-paced run.
 
 ## Example prompts
 
-Use these after installing the harness from this repo into the target repository
-and filling the obvious stack-specific placeholders. They are starting prompts;
-the real contract lives in `CLAUDE.md`, `migration/PLAN.md`, and the matrix.
+Use these after installing the harness from this repo into the target
+repository. Fill only the intent placeholders — what you're migrating and where
+to; everything the repo can reveal (stack, paths, gate commands) the prompt
+tells Claude to discover during Phase 0 and record as assumptions. They are
+starting prompts; the real contract lives in `CLAUDE.md`, `migration/PLAN.md`,
+and the matrix.
 
 > **Prefer to tick boxes?** Use the hosted generator at
 > **[miro77.github.io/prompt-generator.html](https://miro77.github.io/prompt-generator.html)**,
@@ -83,13 +86,17 @@ the new implementation is built beside it.
 Install and configure the migration harness from
 https://github.com/miro77/autonomous-work-harness for this repository.
 
-Goal: migrate <legacy system/module> from <legacy stack> to <target stack> by
-building the new implementation in <target-paths> while keeping <legacy-paths>
-as the frozen executable oracle.
+Goal: migrate <legacy system/module> to <target stack>, building the new
+implementation beside the legacy code and keeping the legacy tree as the frozen
+executable oracle.
 
-Set HARNESS_SCOPE to "<target-paths> migration .claude CLAUDE.md AGENTS.md".
-Set HARNESS_FROZEN to "<legacy-paths>". Configure migration/tools/gates.sh to
-run the full real project checks: <format/lint/type/test command>.
+Discover the rest from the repo during Phase 0 — do not ask:
+- the legacy stack and the legacy source paths (set HARNESS_FROZEN to them);
+- a conventional target path for the new implementation (set HARNESS_SCOPE to
+  "<target-paths> migration .claude CLAUDE.md AGENTS.md");
+- the FULL real project checks from the CI config and manifests — wire them into
+  migration/tools/gates.sh and cite the CI file they came from.
+Record each discovered choice in migration/decisions.md as an assumption.
 
 Fill CLAUDE.md, migration/PLAN.md, migration/legacy-runtime.md, and
 migration/parity-matrix.md. Phase 0 should inventory the legacy units, define
@@ -107,15 +114,19 @@ swapping a framework, while preserving behavior.
 Configure the migration harness from
 https://github.com/miro77/autonomous-work-harness for an in-place migration.
 
-Goal: transform <source-paths> from <old dependency/framework/runtime> to
+Goal: transform the existing code from <old dependency/framework/runtime> to
 <new dependency/framework/runtime> without changing observable behavior.
 
-Set HARNESS_SCOPE to "<source-paths> migration .claude CLAUDE.md AGENTS.md".
-Leave HARNESS_FROZEN empty because there is no separate legacy tree to freeze.
+Discover the rest from the repo during Phase 0 — do not ask:
+- the source paths that use <old dependency/framework/runtime> (set
+  HARNESS_SCOPE to "<source-paths> migration .claude CLAUDE.md AGENTS.md");
+  leave HARNESS_FROZEN empty — there is no separate legacy tree to freeze;
+- the FULL real project checks from the CI config and manifests — wire them into
+  migration/tools/gates.sh and cite the CI file they came from.
+Record each discovered choice in migration/decisions.md as an assumption.
+
 Before editing each unit, capture its current behavior as fixtures from the base
-commit using probes in migration/fixtures/ or probes/. Configure
-migration/tools/gates.sh to run the full real project checks:
-<format/lint/type/test command>.
+commit using probes in migration/fixtures/ or probes/.
 
 Fill CLAUDE.md and migration/parity-matrix.md so each row names one behavior to
 preserve, the fixture/probe that captures it, and the source paths to edit.
@@ -135,10 +146,14 @@ Goal: add <feature name> for <users/callers>. Correctness is the written spec,
 not legacy parity.
 
 Rename template/CLAUDE-feature.md to CLAUDE.md. Use migration/spec-matrix.md as
-the status board and leave HARNESS_FROZEN empty. Set HARNESS_SCOPE to
-"<source-paths> migration .claude CLAUDE.md AGENTS.md". Configure
-migration/tools/gates.sh to run the full existing suite plus the new acceptance
-tests: <format/lint/type/test command>.
+the status board and leave HARNESS_FROZEN empty.
+
+Discover the rest from the repo during Phase 0 — do not ask:
+- the source paths the feature lives in (set HARNESS_SCOPE to
+  "<source-paths> migration .claude CLAUDE.md AGENTS.md");
+- the FULL existing checks from the CI config and manifests — wire them plus the
+  new acceptance tests into migration/tools/gates.sh.
+Record each discovered choice in migration/decisions.md as an assumption.
 
 During Phase 0, break the feature into one row per observable acceptance
 criterion. Write or name the acceptance test for each row before implementation.

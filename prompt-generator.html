@@ -195,10 +195,11 @@
     <a class="repo-link" href="https://github.com/miro77/autonomous-work-harness" target="_blank" rel="noopener">github.com/miro77/autonomous-work-harness ↗</a>
   </header>
   <p class="lead">
-    Tick the kind of work you're starting and fill in your stack. It assembles the
-    exact starting prompt to paste into a fresh Claude&nbsp;Code session at your
-    repo root. Leave a field blank and it stays a <code>&lt;placeholder&gt;</code>
-    for Claude to fill during Phase&nbsp;0.
+    Tick the kind of work you're starting and say where you're going — the one
+    thing the repo can't reveal. It assembles the starting prompt to paste into
+    a fresh Claude&nbsp;Code session at your repo root; the prompt tells Claude
+    to discover everything else — stack, paths, gate commands — from the repo
+    during Phase&nbsp;0. Blank fields stay <code>&lt;placeholder&gt;</code>s.
   </p>
 
   <div class="panes">
@@ -223,80 +224,47 @@
         </label>
       </div>
 
-      <p class="panel-title">2 · Your stack</p>
+      <p class="panel-title">2 · What the repo can't tell Claude</p>
 
-      <!-- Freeze fields -->
+      <!-- Freeze fields: only intent — everything else is discovered from the repo -->
       <div class="fields" data-mode="freeze">
         <div class="field">
-          <label for="f-sys">Legacy system / module</label>
+          <label for="f-sys">What are you migrating</label>
           <input id="f-sys" placeholder="&lt;legacy system/module&gt;">
-        </div>
-        <div class="field">
-          <label for="f-lstack">Legacy stack</label>
-          <input id="f-lstack" placeholder="&lt;legacy stack&gt;">
+          <span class="hint">e.g. <code>the desktop app</code> or <code>the pricing engine</code> — blank = the whole legacy app</span>
         </div>
         <div class="field">
           <label for="f-tstack">Target stack</label>
           <input id="f-tstack" placeholder="&lt;target stack&gt;">
-        </div>
-        <div class="field">
-          <label for="f-tpaths">Target paths <span style="text-transform:none;color:var(--faint)">(new code)</span></label>
-          <input id="f-tpaths" placeholder="&lt;target-paths&gt;">
-          <span class="hint">e.g. <code>src</code> or <code>app/src</code></span>
-        </div>
-        <div class="field">
-          <label for="f-lpaths">Legacy paths <span style="text-transform:none;color:var(--faint)">(frozen oracle)</span></label>
-          <input id="f-lpaths" placeholder="&lt;legacy-paths&gt;">
-          <span class="hint">e.g. <code>legacy/src</code></span>
-        </div>
-        <div class="field">
-          <label for="f-gate">Gate command</label>
-          <input id="f-gate" placeholder="&lt;format/lint/type/test command&gt;">
-          <span class="hint">the full real project checks, e.g. <code>npm run lint && npm test</code></span>
+          <span class="hint">where you're going, e.g. <code>Flutter</code> or <code>React + TypeScript</code> — the one thing the repo can't tell Claude</span>
         </div>
       </div>
 
       <!-- In-place fields -->
       <div class="fields" data-mode="inplace" hidden>
         <div class="field">
-          <label for="i-spaths">Source paths <span style="text-transform:none;color:var(--faint)">(edited in place)</span></label>
-          <input id="i-spaths" placeholder="&lt;source-paths&gt;">
-          <span class="hint">e.g. <code>src</code></span>
-        </div>
-        <div class="field">
-          <label for="i-old">From <span style="text-transform:none;color:var(--faint)">(old dep / framework / runtime)</span></label>
+          <label for="i-old">Swap what</label>
           <input id="i-old" placeholder="&lt;old dependency/framework/runtime&gt;">
+          <span class="hint">e.g. <code>Moment.js</code></span>
         </div>
         <div class="field">
-          <label for="i-new">To <span style="text-transform:none;color:var(--faint)">(new dep / framework / runtime)</span></label>
+          <label for="i-new">For what</label>
           <input id="i-new" placeholder="&lt;new dependency/framework/runtime&gt;">
-        </div>
-        <div class="field">
-          <label for="i-gate">Gate command</label>
-          <input id="i-gate" placeholder="&lt;format/lint/type/test command&gt;">
-          <span class="hint">the full real project checks, e.g. <code>make check</code></span>
+          <span class="hint">e.g. <code>date-fns</code></span>
         </div>
       </div>
 
       <!-- Feature fields -->
       <div class="fields" data-mode="feature" hidden>
         <div class="field">
-          <label for="x-feat">Feature name</label>
+          <label for="x-feat">Feature</label>
           <input id="x-feat" placeholder="&lt;feature name&gt;">
+          <span class="hint">e.g. <code>CSV export</code></span>
         </div>
         <div class="field">
           <label for="x-users">For <span style="text-transform:none;color:var(--faint)">(users / callers)</span></label>
           <input id="x-users" placeholder="&lt;users/callers&gt;">
-        </div>
-        <div class="field">
-          <label for="x-spaths">Source paths</label>
-          <input id="x-spaths" placeholder="&lt;source-paths&gt;">
-          <span class="hint">e.g. <code>src</code></span>
-        </div>
-        <div class="field">
-          <label for="x-gate">Gate command</label>
-          <input id="x-gate" placeholder="&lt;format/lint/type/test command&gt;">
-          <span class="hint">existing suite + new acceptance tests, e.g. <code>pytest</code></span>
+          <span class="hint">e.g. <code>analysts</code> or <code>the reporting service</code></span>
         </div>
       </div>
 
@@ -347,12 +315,16 @@
     freeze: function () {
       return "Install and configure the migration harness from\n" +
         URL + " for this repository.\n\n" +
-        "Goal: migrate " + val("f-sys") + " from " + val("f-lstack") + " to " + val("f-tstack") + " by\n" +
-        "building the new implementation in " + val("f-tpaths") + " while keeping " + val("f-lpaths") + "\n" +
-        "as the frozen executable oracle.\n\n" +
-        "Set HARNESS_SCOPE to \"" + val("f-tpaths") + " migration .claude CLAUDE.md AGENTS.md\".\n" +
-        "Set HARNESS_FROZEN to \"" + val("f-lpaths") + "\". Configure migration/tools/gates.sh to\n" +
-        "run the full real project checks: " + val("f-gate") + ".\n\n" +
+        "Goal: migrate " + val("f-sys") + " to " + val("f-tstack") + ", building the new\n" +
+        "implementation beside the legacy code and keeping the legacy tree as the frozen\n" +
+        "executable oracle.\n\n" +
+        "Discover the rest from the repo during Phase 0 — do not ask:\n" +
+        "- the legacy stack and the legacy source paths (set HARNESS_FROZEN to them);\n" +
+        "- a conventional target path for the new implementation (set HARNESS_SCOPE to\n" +
+        "  \"<target-paths> migration .claude CLAUDE.md AGENTS.md\");\n" +
+        "- the FULL real project checks from the CI config and manifests — wire them into\n" +
+        "  migration/tools/gates.sh and cite the CI file they came from.\n" +
+        "Record each discovered choice in migration/decisions.md as an assumption.\n\n" +
         "Fill CLAUDE.md, migration/PLAN.md, migration/legacy-runtime.md, and\n" +
         "migration/parity-matrix.md. Phase 0 should inventory the legacy units, define\n" +
         "fixture probes, and split the migration into one observable parity row per\n" +
@@ -362,14 +334,17 @@
     inplace: function () {
       return "Configure the migration harness from\n" +
         URL + " for an in-place migration.\n\n" +
-        "Goal: transform " + val("i-spaths") + " from " + val("i-old") + " to\n" +
+        "Goal: transform the existing code from " + val("i-old") + " to\n" +
         val("i-new") + " without changing observable behavior.\n\n" +
-        "Set HARNESS_SCOPE to \"" + val("i-spaths") + " migration .claude CLAUDE.md AGENTS.md\".\n" +
-        "Leave HARNESS_FROZEN empty because there is no separate legacy tree to freeze.\n" +
+        "Discover the rest from the repo during Phase 0 — do not ask:\n" +
+        "- the source paths that use " + val("i-old") + " (set\n" +
+        "  HARNESS_SCOPE to \"<source-paths> migration .claude CLAUDE.md AGENTS.md\");\n" +
+        "  leave HARNESS_FROZEN empty — there is no separate legacy tree to freeze;\n" +
+        "- the FULL real project checks from the CI config and manifests — wire them into\n" +
+        "  migration/tools/gates.sh and cite the CI file they came from.\n" +
+        "Record each discovered choice in migration/decisions.md as an assumption.\n\n" +
         "Before editing each unit, capture its current behavior as fixtures from the base\n" +
-        "commit using probes in migration/fixtures/ or probes/. Configure\n" +
-        "migration/tools/gates.sh to run the full real project checks:\n" +
-        val("i-gate") + ".\n\n" +
+        "commit using probes in migration/fixtures/ or probes/.\n\n" +
         "Fill CLAUDE.md and migration/parity-matrix.md so each row names one behavior to\n" +
         "preserve, the fixture/probe that captures it, and the source paths to edit.\n" +
         "Work one row at a time; no success claim without gates and fresh-context audit.";
@@ -380,10 +355,13 @@
         "Goal: add " + val("x-feat") + " for " + val("x-users") + ". Correctness is the written spec,\n" +
         "not legacy parity.\n\n" +
         "Rename template/CLAUDE-feature.md to CLAUDE.md. Use migration/spec-matrix.md as\n" +
-        "the status board and leave HARNESS_FROZEN empty. Set HARNESS_SCOPE to\n" +
-        "\"" + val("x-spaths") + " migration .claude CLAUDE.md AGENTS.md\". Configure\n" +
-        "migration/tools/gates.sh to run the full existing suite plus the new acceptance\n" +
-        "tests: " + val("x-gate") + ".\n\n" +
+        "the status board and leave HARNESS_FROZEN empty.\n\n" +
+        "Discover the rest from the repo during Phase 0 — do not ask:\n" +
+        "- the source paths the feature lives in (set HARNESS_SCOPE to\n" +
+        "  \"<source-paths> migration .claude CLAUDE.md AGENTS.md\");\n" +
+        "- the FULL existing checks from the CI config and manifests — wire them plus the\n" +
+        "  new acceptance tests into migration/tools/gates.sh.\n" +
+        "Record each discovered choice in migration/decisions.md as an assumption.\n\n" +
         "During Phase 0, break the feature into one row per observable acceptance\n" +
         "criterion. Write or name the acceptance test for each row before implementation.\n" +
         "Use spec-auditor for fresh-context audits. Keep the existing suite green on\n" +
