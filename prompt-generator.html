@@ -132,14 +132,15 @@
   }
   .field input::placeholder { color: var(--faint); }
   .field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
-  .field select {
-    font-family: var(--mono); font-size: .9rem; color: var(--ink);
-    background: var(--field); border: 1px solid var(--border); border-radius: 7px;
-    padding: .55rem .7rem; width: 100%; cursor: pointer;
-  }
-  .field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
   .field .hint { font-size: .76rem; color: var(--faint); }
   .field .hint code { font-family: var(--mono); color: var(--muted); }
+
+  /* ---- Advanced (collapsed by default) ----------------------------- */
+  details.adv { margin-top: 1.6rem; }
+  details.adv summary { cursor: pointer; margin: 0; }
+  details.adv summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  details.adv[open] summary { margin-bottom: 1rem; }
+  .mode .m-desc code { font-family: var(--mono); font-size: .92em; }
 
   /* ---- Terminal output card --------------------------------------- */
   .term {
@@ -299,32 +300,14 @@
         </div>
       </div>
 
-      <p class="panel-title" style="margin-top:1.6rem">3 · Unattended drive</p>
-      <div class="modes" role="radiogroup" aria-label="Split handling">
+      <details class="adv">
+        <summary class="panel-title">Advanced — defaults are fine</summary>
         <label class="mode">
-          <input type="radio" name="split" value="auto" checked>
-          <span class="m-name">Split automatically</span>
-          <span class="m-desc">When a row is too big, the tick splits it into sub-rows, commits, and ends — the next fresh tick implements them. The run keeps going unattended (the harness default).</span>
+          <input type="checkbox" id="model-split">
+          <span class="m-name">Split models: Sonnet builds, Opus audits</span>
+          <span class="m-desc">Adds a model-wiring note to the prompt: implementation ticks run on Sonnet, the fresh-context auditors stay pinned to Opus, and Phase&nbsp;0 runs once on Opus. Leave off to use the session default everywhere. Anything rarer (all-Opus, Haiku passes, pausing the drive on splits) is a one-line edit to the pasted prompt — or use <code>kick-loop.sh --drive --review</code> at runtime.</span>
         </label>
-        <label class="mode">
-          <input type="radio" name="split" value="human">
-          <span class="m-name">Pause for review after a split</span>
-          <span class="m-desc">After a split commit, stop the whole run and flag the proposed sub-rows in HANDOFF.md so you approve them before implementation resumes.</span>
-        </label>
-      </div>
-
-      <p class="panel-title" style="margin-top:1.6rem">4 · Model strategy <span style="text-transform:none;letter-spacing:0;color:var(--faint)">optional</span></p>
-      <div class="field">
-        <label for="model">Which models run the work?</label>
-        <select id="model">
-          <option value="">Session default — one model everywhere</option>
-          <option value="split">Split: Sonnet build · Opus audit + plan (recommended)</option>
-          <option value="opusplan">opusplan hybrid — leans interactive</option>
-          <option value="opus">All Opus — max quality</option>
-          <option value="haiku">All Haiku — cheapest &amp; fastest</option>
-        </select>
-        <span class="hint">Adds a model-wiring line to the prompt. The auditor subagents already ship pinned to Opus.</span>
-      </div>
+      </details>
     </section>
 
     <!-- Right: output -->
@@ -408,58 +391,25 @@
     }
   };
 
-  // Appended only for the human-gated split policy — an override of the harness
-  // default (which lets the unattended drive flow into sub-rows across ticks).
-  var SPLIT_HUMAN =
-    "\n\nSplit policy: if a slice is split-required, split it into sub-rows and commit\n" +
-    "the split as usual, then treat that split as a clean TERMINATION-style stop —\n" +
-    "write migration/HANDOFF.md listing the proposed sub-rows for review and end the\n" +
-    "run. Do NOT park mid-tick waiting for input, and do not implement the sub-rows\n" +
-    "until a human has approved them and resumed the drive. (By default the run would\n" +
-    "continue into the sub-rows on the next fresh tick without stopping.)";
-
-  // Model-wiring line appended per strategy. "" (session default) adds nothing,
-  // keeping the default output identical to the canonical README prompts.
-  var MODEL = {
-    "": "",
-    split:
-      "\n\nModel strategy (split): run implementation slices on Sonnet — set model to\n" +
-      "sonnet in settings.json, or pass --model sonnet to the driver. Keep the\n" +
-      "parity-auditor, spec-auditor and legacy-analyst subagents pinned to Opus (the\n" +
-      "model: field in .claude/agents/*.md) so the fresh-context audit stays sharp. Run\n" +
-      "Phase 0 — inventory, slicing, matrix — once on Opus (--model opus) before driving.",
-    opusplan:
-      "\n\nModel strategy (opusplan): set the session model to opusplan so implementation\n" +
-      "runs on Sonnet and Opus is consulted for planning. Note opusplan's planning\n" +
-      "escalation is tuned for interactive plan mode and is less predictable in headless\n" +
-      "--drive runs; prefer the explicit split for unattended use.",
-    opus:
-      "\n\nModel strategy: run implementation and the auditor subagents on Opus (--model\n" +
-      "opus, or model opus in settings.json). Highest quality, highest cost.",
-    haiku:
-      "\n\nModel strategy: run implementation on Haiku (--model haiku) for the fastest,\n" +
-      "cheapest passes, leaning on the gates and fixtures as the safety net. Keep the\n" +
-      "auditor subagents on Opus (model: opus in .claude/agents/*.md) so correctness\n" +
-      "review stays strong."
-  };
+  // Appended only when the split-models checkbox is ticked. Unticked output
+  // stays identical to the canonical README prompts.
+  var MODEL_SPLIT =
+    "\n\nModel strategy (split): run implementation slices on Sonnet — set model to\n" +
+    "sonnet in settings.json, or pass --model sonnet to the driver. Keep the\n" +
+    "parity-auditor, spec-auditor and legacy-analyst subagents pinned to Opus (the\n" +
+    "model: field in .claude/agents/*.md) so the fresh-context audit stays sharp. Run\n" +
+    "Phase 0 — inventory, slicing, matrix — once on Opus (--model opus) before driving.";
 
   var out = document.getElementById("out");
 
   function currentMode() {
     return document.querySelector('input[name="mode"]:checked').value;
   }
-  function currentSplit() {
-    return document.querySelector('input[name="split"]:checked').value;
-  }
-  function currentModel() {
-    return document.getElementById("model").value;
-  }
 
   // Render into <pre>, highlighting any remaining <...> placeholders.
   function render() {
     var text = templates[currentMode()]();
-    text += MODEL[currentModel()] || "";
-    if (currentSplit() === "human") text += SPLIT_HUMAN;
+    if (document.getElementById("model-split").checked) text += MODEL_SPLIT;
     out.textContent = "";
     var re = /<[^>\n]+>/g, last = 0, m;
     while ((m = re.exec(text)) !== null) {
@@ -485,10 +435,6 @@
   document.querySelectorAll('input[name="mode"]').forEach(function (r) {
     r.addEventListener("change", function () { syncFields(); render(); });
   });
-  document.querySelectorAll('input[name="split"]').forEach(function (r) {
-    r.addEventListener("change", render);
-  });
-  document.getElementById("model").addEventListener("change", render);
 
   var copyBtn = document.getElementById("copy");
   copyBtn.addEventListener("click", function () {
