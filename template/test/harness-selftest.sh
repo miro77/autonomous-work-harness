@@ -168,15 +168,91 @@ grep -q 'internal ====' migration/tools/gates.sh && no "neutralize: internal ===
 grep -q 'record-gates.sh' migration/tools/gates.sh && ok "neutralize: record-gates line survives" || no "neutralize: record-gates line survives" "removed" "present"
 cd /; rm -rf "$R"
 
-# ============================================================ kick-loop (resume driver)
+# ============================================================ kick-loop (resume driver) + check-complete
 R="$(mkrepo 'src')"; cd "$R"
 out="$(bash migration/tools/kick-loop.sh --check 2>&1)"
 case "$out" in *"STATE: resume"*) ok "kick-loop: --check resume when no HANDOFF";; *) no "kick-loop: --check resume when no HANDOFF" "$out" "STATE: resume";; esac
+
+# an arbitrary HANDOFF.md must NOT read as done (it used to no-op every run)
+bash migration/tools/check-complete.sh >/dev/null 2>&1
+chk "complete: no handoff is invalid" "$?" 1
 printf 'nothing left\n' > migration/HANDOFF.md
+bash migration/tools/check-complete.sh >/dev/null 2>&1
+chk "complete: untracked handoff is invalid" "$?" 1
 out="$(bash migration/tools/kick-loop.sh --check 2>&1)"
-case "$out" in *"STATE: done"*) ok "kick-loop: --check done when HANDOFF present";; *) no "kick-loop: --check done when HANDOFF present" "$out" "STATE: done";; esac
-bash migration/tools/kick-loop.sh >/dev/null 2>&1; chk "kick-loop: no-op exit 0 when terminated" "$?" 0
+case "$out" in *"STATE: invalid-handoff"*) ok "kick-loop: --check flags invalid handoff";; *) no "kick-loop: --check flags invalid handoff" "$out" "STATE: invalid-handoff";; esac
+bash migration/tools/kick-loop.sh >/dev/null 2>&1
+chk "kick-loop: invalid handoff exits 65 (not silent no-op)" "$?" 65
+
+# committed but without a STATUS line: still invalid
+git add migration/HANDOFF.md >/dev/null 2>&1; git commit -qm h1 >/dev/null
+bash migration/tools/check-complete.sh >/dev/null 2>&1
+chk "complete: missing STATUS line is invalid" "$?" 1
+
+# valid COMPLETE terminal state
+cat > migration/parity-matrix.md <<'EOF'
+| id | slice | legacy source | target path | deps | status | deviations | findings |
+|----|-------|---------------|-------------|------|--------|------------|----------|
+| B01 | bootstrap | - | - | - | audited-pass | - | - |
+| F01 | thing | - | - | B01 | audited-pass | - | - |
+EOF
+printf 'STATUS: COMPLETE\n\nall rows pass\n' > migration/HANDOFF.md
+git add migration/parity-matrix.md migration/HANDOFF.md >/dev/null 2>&1; git commit -qm h2 >/dev/null
+out="$(bash migration/tools/check-complete.sh 2>&1)"; rc=$?
+chk "complete: COMPLETE fixture validates" "$rc" 0
+case "$out" in *"STATUS: COMPLETE"*) ok "complete: prints STATUS: COMPLETE";; *) no "complete: prints STATUS: COMPLETE" "$out" "STATUS: COMPLETE";; esac
+bash migration/tools/kick-loop.sh >/dev/null 2>&1
+chk "kick-loop: COMPLETE exits 0" "$?" 0
+out="$(bash migration/tools/kick-loop.sh --check 2>&1)"
+case "$out" in *"done:COMPLETE"*) ok "kick-loop: --check reports done:COMPLETE";; *) no "kick-loop: --check reports done:COMPLETE" "$out" "done:COMPLETE";; esac
+
+# claim/board mismatch: audited-fail row under a COMPLETE claim is invalid
+sed -i 's/^| F01 | thing | - | - | B01 | audited-pass /| F01 | thing | - | - | B01 | audited-fail /' migration/parity-matrix.md
+git add migration/parity-matrix.md >/dev/null 2>&1; git commit -qm h3 >/dev/null
+bash migration/tools/check-complete.sh >/dev/null 2>&1
+chk "complete: COMPLETE claim over audited-fail row is invalid" "$?" 1
+bash migration/tools/kick-loop.sh >/dev/null 2>&1
+chk "kick-loop: mismatched handoff exits 65" "$?" 65
+
+# FAILED terminal state -> exit 20
+printf 'STATUS: FAILED\n\nF01 failed audit\n' > migration/HANDOFF.md
+git add migration/HANDOFF.md >/dev/null 2>&1; git commit -qm h4 >/dev/null
+bash migration/tools/kick-loop.sh >/dev/null 2>&1
+chk "kick-loop: FAILED exits 20" "$?" 20
+
+# BLOCKED via an open gate proposal -> exit 10; COMPLETE past one is invalid
+sed -i 's/^| F01 | thing | - | - | B01 | audited-fail /| F01 | thing | - | - | B01 | audited-pass /' migration/parity-matrix.md
+printf '## PROPOSAL: widen a gate\n' >> migration/PROPOSED-GATE-CHANGES.md
+printf 'STATUS: BLOCKED\n\nopen proposal remains\n' > migration/HANDOFF.md
+git add migration/parity-matrix.md migration/PROPOSED-GATE-CHANGES.md migration/HANDOFF.md >/dev/null 2>&1; git commit -qm h5 >/dev/null
+bash migration/tools/kick-loop.sh >/dev/null 2>&1
+chk "kick-loop: BLOCKED (open proposal) exits 10" "$?" 10
+printf 'STATUS: COMPLETE\n' > migration/HANDOFF.md
+git add migration/HANDOFF.md >/dev/null 2>&1; git commit -qm h6 >/dev/null
+bash migration/tools/check-complete.sh >/dev/null 2>&1
+chk "complete: COMPLETE claim past an open proposal is invalid" "$?" 1
+
+# feature profile: check-complete validates the SPEC board
+printf 'HARNESS_PROFILE="feature"\n' >> migration/harness.env
+cat > migration/spec-matrix.md <<'EOF'
+| id | criterion (observable, testable) | area / component | deps | status | acceptance test | findings |
+|----|----------------------------------|------------------|------|--------|-----------------|----------|
+| S00 | bootstrap | - | - | audited-pass | - | - |
+| S01 | works | api | S00 | audited-pass | t1 | - |
+EOF
+sed -i '/^## PROPOSAL: widen a gate$/d' migration/PROPOSED-GATE-CHANGES.md
+printf 'STATUS: COMPLETE\n\nspec met\n' > migration/HANDOFF.md
+git add migration/spec-matrix.md migration/PROPOSED-GATE-CHANGES.md migration/HANDOFF.md migration/harness.env >/dev/null 2>&1; git commit -qm h7 >/dev/null
+bash migration/tools/check-complete.sh >/dev/null 2>&1
+chk "complete: feature profile validates spec-matrix" "$?" 0
 cd /; rm -rf "$R"
+
+# --- profile plumbing is shipped, not prose ---
+cd "$H"
+[ -f .claude/commands/feature-slice.md ] && ok "profile: /feature-slice command shipped" || no "profile: /feature-slice command shipped" "missing" "file"
+grep -q "feature-slice" migration/SINGLE-TICK-PROMPT.md && ok "profile: tick prompt selects slice command by profile" || no "profile: tick prompt selects slice command by profile" "missing" "feature-slice"
+grep -q "HARNESS_PROFILE" migration/harness.env && ok "profile: HARNESS_PROFILE in harness.env" || no "profile: HARNESS_PROFILE in harness.env" "missing" "HARNESS_PROFILE"
+grep -q "S00" migration/spec-matrix.md && ok "profile: spec-matrix ships bootstrap row S00" || no "profile: spec-matrix ships bootstrap row S00" "missing" "S00"
 
 # --- kick-loop argument / prompt-file validation (no claude needed) ---
 R="$(mkrepo 'src')"; cd "$R"
@@ -232,6 +308,77 @@ rm -rf .harness
 mkdir -p .harness/kick-loop.lock
 out="$(KL 2>&1)"; case "$out" in *"another run holds"*) ok "kick-loop: respects a fresh lock";; *) no "kick-loop: respects a fresh lock" "$out" "another run holds";; esac
 rm -rf .harness
+
+# stale mtime but LIVE owner pid: must NOT recover (no concurrent drivers)
+mkdir -p .harness/kick-loop.lock
+printf 'pid=%s started=x\n' "$$" > .harness/kick-loop.lock/meta
+touch -t 200001010000 .harness/kick-loop.lock 2>/dev/null || true
+out="$(KL 2>&1)"
+case "$out" in *ALIVE*) ok "kick-loop: old lock with LIVE owner not recovered";; *) no "kick-loop: old lock with LIVE owner not recovered" "$out" "ALIVE";; esac
+rm -rf .harness
+
+# stale mtime and DEAD owner pid: recovered
+sleep 0.1 & deadpid=$!; wait "$deadpid" 2>/dev/null
+mkdir -p .harness/kick-loop.lock
+printf 'pid=%s started=x\n' "$deadpid" > .harness/kick-loop.lock/meta
+touch -t 200001010000 .harness/kick-loop.lock 2>/dev/null || true
+out="$(KL 2>&1)"
+case "$out" in *"recovering stale lock"*) ok "kick-loop: old lock with DEAD owner recovered";; *) no "kick-loop: old lock with DEAD owner recovered" "$out" "recovering";; esac
+rm -rf .harness
+
+# headless --review must STOP (exit 70), --review-log-only continues
+mkfake <<'FAKE'
+#!/usr/bin/env bash
+printf 'x\n' >> src/a.txt
+git add src/a.txt >/dev/null 2>&1
+git commit -qm "migrate T01: audited-fail" >/dev/null 2>&1
+exit 0
+FAKE
+KL --drive --review </dev/null >/dev/null 2>&1
+chk "kick-loop: headless --review stops with 70" "$?" 70
+rm -rf .harness
+out="$( ( export HARNESS_MAX_TICKS=1; KL --drive --review-log-only </dev/null 2>&1 ) )"; rc=$?
+chk "kick-loop: --review-log-only continues to budget (0)" "$rc" 0
+case "$out" in *"review-log-only, continuing"*) ok "kick-loop: --review-log-only logs and continues";; *) no "kick-loop: --review-log-only logs and continues" "$out" "continuing";; esac
+rm -rf .harness
+cd /; rm -rf "$R"
+
+# ============================================================ in-place oracle gates (HARNESS_ORACLE)
+R="$(mkrepo 'src')"; cd "$R"
+printf 'HARNESS_ORACLE="baselines"\n' >> migration/harness.env
+out="$(bash migration/tools/gates.sh 2>&1)"; rc=$?
+chk "oracle: unconfigured baseline parity FAILS gates" "$rc" 1
+case "$out" in *"BASELINE-PARITY"*|*"content parity NOT CONFIGURED"*) ok "oracle: failure names the CONFIGURE step";; *) no "oracle: failure names the CONFIGURE step" "$out" "BASELINE-PARITY";; esac
+sed -i '/# HARNESS:BASELINE-PARITY-START/,/# HARNESS:BASELINE-PARITY-END/c\true # selftest: configured' migration/tools/check-baselines.sh
+GATE; chk "oracle: configured oracle passes gates" "$?" 0
+
+# strict board parsing: duplicate id + unknown status are ERRORS
+cat > migration/parity-matrix.md <<'EOF'
+| id | slice | legacy source | target path | deps | status | deviations | findings |
+|----|-------|---------------|-------------|------|--------|------------|----------|
+| B01 | bootstrap | - | - | - | open | - | - |
+| B01 | dup | - | - | - | open | - | - |
+| F02 | odd | - | - | - | inprogress | - | - |
+EOF
+out="$(bash migration/tools/check-matrix.sh 2>&1)"; rc=$?
+chk "oracle: strict matrix parse fails on bad board" "$rc" 1
+case "$out" in *"duplicate row id B01"*) ok "oracle: duplicate row id detected";; *) no "oracle: duplicate row id detected" "$out" "duplicate";; esac
+case "$out" in *"unknown status"*) ok "oracle: unknown status spelling detected";; *) no "oracle: unknown status spelling detected" "$out" "unknown status";; esac
+
+# T-before-M convention + coverage seam
+cat > migration/parity-matrix.md <<'EOF'
+| id | slice | legacy source | target path | deps | status | deviations | findings |
+|----|-------|---------------|-------------|------|--------|------------|----------|
+| T-unita | pin | - | - | - | open | - | - |
+| M-unita | edit | - | - | T-unita | in-progress | - | - |
+EOF
+out="$(bash migration/tools/check-matrix.sh 2>&1)"; rc=$?
+chk "oracle: M active before T audited-pass fails" "$rc" 1
+case "$out" in *"T sub-row(s) not audited-pass"*|*"no T-"*) ok "oracle: names the unmet T row";; *) no "oracle: names the unmet T row" "$out" "T sub-row";; esac
+printf '#!/usr/bin/env bash\necho missing_unit\n' > migration/tools/list-affected-units.sh
+chmod +x migration/tools/list-affected-units.sh
+out="$(bash migration/tools/check-matrix.sh 2>&1)"
+case "$out" in *"missing_unit"*) ok "oracle: coverage seam flags unit without rows";; *) no "oracle: coverage seam flags unit without rows" "$out" "missing_unit";; esac
 cd /; rm -rf "$R"
 
 # --- kick-loop --tick / --drive: fresh-context ticks ---
@@ -256,13 +403,20 @@ chk "kick-loop: --tick invokes claude exactly once" "$(calls)" 1
 grep -q 'exactly ONE tick' prompt.txt && ok "kick-loop: --tick defaults to SINGLE-TICK-PROMPT.md" || no "kick-loop: --tick defaults to SINGLE-TICK-PROMPT.md" "$(head -c 60 prompt.txt)" "exactly ONE tick"
 rm -f calls.log prompt.txt; rm -rf .harness
 
-# --drive: one gated slice per tick, committed HANDOFF on the second tick -> clean 0
+# --drive: one gated slice per tick, VALID committed HANDOFF on the second
+# tick -> clean 0. The handoff must carry a STATUS line and match the board
+# (check-complete.sh validates it — a bare marker file no longer counts).
 mkfake <<'FAKE'
 #!/usr/bin/env bash
 echo x >> calls.log
 n=$(wc -l < calls.log | tr -d '[:space:]')
 if [ "$n" -ge 2 ]; then
-  printf 'nothing left\n' > migration/HANDOFF.md
+  {
+    printf '| id | slice | legacy source | target path | deps | status | deviations | findings |\n'
+    printf '|----|-------|---------------|-------------|------|--------|------------|----------|\n'
+    printf '| B01 | bootstrap | - | - | - | audited-pass | - | - |\n'
+  } > migration/parity-matrix.md
+  printf 'STATUS: COMPLETE\n\nnothing left\n' > migration/HANDOFF.md
   bash migration/tools/gates.sh >/dev/null 2>&1
   git add -A >/dev/null 2>&1
   git commit -qm "migrate HANDOFF: done" >/dev/null 2>&1
@@ -274,7 +428,9 @@ else
 fi
 exit 0
 FAKE
-chk "kick-loop: --drive runs ticks until committed HANDOFF, exits 0" "$( KL --drive >/dev/null 2>&1; echo $? )" 0
+out="$( KL --drive 2>&1 )"; rc=$?
+chk "kick-loop: --drive runs ticks until VALID committed HANDOFF, exits 0" "$rc" 0
+case "$out" in *"terminated COMPLETE"*) ok "kick-loop: --drive reports terminated COMPLETE";; *) no "kick-loop: --drive reports terminated COMPLETE" "$out" "terminated COMPLETE";; esac
 chk "kick-loop: --drive stopped after the HANDOFF tick" "$(calls)" 2
 rm -f calls.log; git rm -q migration/HANDOFF.md >/dev/null 2>&1; git commit -qm "reset HANDOFF" >/dev/null 2>&1; rm -rf .harness
 

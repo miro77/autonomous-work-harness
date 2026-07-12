@@ -170,11 +170,9 @@ sandbox snapshot.
 
 ## Template, not a generator
 
-This harness ships as a copy-in template, not a one-command installer/generator.
-A template is legible, Claude can adapt it in place, and there's no installer
-code to keep working as Claude Code's hook/settings format evolves — the cost is
-~30 min of copy-and-fill per project.
-
-If the copy-and-fill genuinely starts to hurt across several migrations, build a
-small installer at that point — shaped by real use, and wrapping this template
-rather than replacing it.
+This harness ships as a copy-in template plus a thin stamping installer
+(`install.sh`): the installer copies the template, `chmod`s the scripts,
+gitignores `.harness/`, and prints a status report — it does NOT generate or
+transform code, so the template stays the single source of truth and there is
+no generator to keep working as Claude Code's hook/settings format evolves.
+The remaining cost is ~30 min of fill-in-the-placeholders per project.

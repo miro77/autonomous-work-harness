@@ -52,8 +52,11 @@ template/                 # copy this into your target repo
 
 ## Quick start
 
-See **[GETTING-STARTED.md](GETTING-STARTED.md)**. In short: copy `template/*`
-into your repo, edit `migration/harness.env` (scope + frozen paths) and the
+See **[GETTING-STARTED.md](GETTING-STARTED.md)**. In short: run
+`bash install.sh` from your repo root (or `cp -R template/. .` — NOT
+`cp -r template/* .`: the `*` glob drops the dot-dir `.claude/` with every
+hook, agent, and command), edit `migration/harness.env` (scope + frozen
+paths) and the
 PROJECT GATES block in `migration/tools/gates.sh`, fill the `<...>` placeholders
 in `CLAUDE.md`/`PLAN.md`, then run `bash migration/tools/kick-loop.sh --drive`
 (one slice per fresh context, back-to-back) — or paste
@@ -154,8 +157,10 @@ https://github.com/miro77/autonomous-work-harness to build <feature name>.
 Goal: add <feature name> for <users/callers>. Correctness is the written spec,
 not legacy parity.
 
-Rename template/CLAUDE-feature.md to CLAUDE.md. Use migration/spec-matrix.md as
-the status board and leave HARNESS_FROZEN empty.
+Rename the installed CLAUDE-feature.md (at the repo root after install) to
+CLAUDE.md, and set HARNESS_PROFILE="feature" in migration/harness.env — the
+loop then drives /feature-slice against migration/spec-matrix.md, used as
+the status board. Leave HARNESS_FROZEN empty.
 
 Discover the rest from the repo during Phase 0 — do not ask:
 - the source paths the feature lives in (set HARNESS_SCOPE to

@@ -355,13 +355,18 @@ Full spec: migration/SPEC.md"></textarea>
         val("i-new") + " without changing observable behavior.\n\n" +
         "Discover the rest from the repo during Phase 0 — do not ask:\n" +
         "- the source paths that use " + val("i-old") + " (set\n" +
-        "  HARNESS_SCOPE to \"<source-paths> migration .claude CLAUDE.md AGENTS.md\");\n" +
-        "  leave HARNESS_FROZEN empty — there is no separate legacy tree to freeze;\n" +
+        "  HARNESS_SCOPE to \"<source-paths> migration .claude CLAUDE.md AGENTS.md\",\n" +
+        "  PLUS the build/CI scripts, CI configs, and any vendored tool binaries the\n" +
+        "  gates execute — the proof must cover the gates' own inputs);\n" +
+        "  leave HARNESS_FROZEN empty — there is no separate legacy tree to freeze\n" +
+        "  (unless the repo vendors the old dependency's own sources: freeze those);\n" +
         "- the FULL real project checks from the CI config and manifests — wire them into\n" +
         "  migration/tools/gates.sh and cite the CI file they came from.\n" +
         "Record each discovered choice in migration/decisions.md as an assumption.\n\n" +
         "Before editing each unit, capture its current behavior as fixtures from the base\n" +
-        "commit using probes in migration/fixtures/ or probes/.\n\n" +
+        "commit using probes in migration/fixtures/ or probes/. Tests-first: a unit gets\n" +
+        "a T-row (pin behavior with tests on unmigrated code, snapshot a baseline)\n" +
+        "before its M-row (the edit) — see docs/IN-PLACE-PROFILE.md.\n\n" +
         "Fill CLAUDE.md and migration/parity-matrix.md so each row names one behavior to\n" +
         "preserve, the fixture/probe that captures it, and the source paths to edit.\n" +
         "Work one row at a time; no success claim without gates and fresh-context audit.";
@@ -371,8 +376,10 @@ Full spec: migration/SPEC.md"></textarea>
         URL + " to build " + val("x-feat") + ".\n\n" +
         "Goal: add " + val("x-feat") + " for " + val("x-users") + ". Correctness is the written spec,\n" +
         "not legacy parity.\n\n" +
-        "Rename template/CLAUDE-feature.md to CLAUDE.md. Use migration/spec-matrix.md as\n" +
-        "the status board and leave HARNESS_FROZEN empty.\n\n" +
+        "Rename the installed CLAUDE-feature.md (at the repo root after install) to\n" +
+        "CLAUDE.md, and set HARNESS_PROFILE=\"feature\" in migration/harness.env — the\n" +
+        "loop then drives /feature-slice against migration/spec-matrix.md, used as\n" +
+        "the status board. Leave HARNESS_FROZEN empty.\n\n" +
         "Discover the rest from the repo during Phase 0 — do not ask:\n" +
         "- the source paths the feature lives in (set HARNESS_SCOPE to\n" +
         "  \"<source-paths> migration .claude CLAUDE.md AGENTS.md\");\n" +

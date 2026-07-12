@@ -78,7 +78,10 @@ for f in "${MD[@]:-}"; do
       if [ ! -e "$tf" ]; then note "$f -> $tgt  (missing file: $tf)"; continue; fi
     fi
     if [ -n "$anchor" ] && [ -f "$tf" ]; then
-      if ! anchors_of "$tf" | grep -qxF "$anchor"; then note "$f -> $tgt  (no heading '#$anchor' in $tf)"; fi
+      # capture first: `anchors_of | grep -q` lets grep exit on the first
+      # match and SIGPIPE the generator mid-write (noisy on some platforms)
+      _anchors="$(anchors_of "$tf")"
+      if ! printf '%s\n' "$_anchors" | grep -qxF "$anchor"; then note "$f -> $tgt  (no heading '#$anchor' in $tf)"; fi
     fi
   done < <(grep -oE '\]\([^)]+\)' "$f" 2>/dev/null | sed -E 's/^\]\(//; s/\)$//; s/[[:space:]].*$//')
 done

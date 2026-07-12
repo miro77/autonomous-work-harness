@@ -50,9 +50,15 @@ done
 grep -qxF '.harness/' "$T/.gitignore" && ok "install: gitignored .harness/" || no "install: .gitignore missing .harness/"
 ( cd "$T" && bash migration/tools/doctor.sh >/dev/null 2>&1 ); chk "install: doctor runs in target" "$?" 0
 
-# clobber protection
-bash "$DIST/install.sh" "$T"         >/dev/null 2>&1; chk "install: refuses to clobber without --force" "$?" 1
+# clobber protection: MODIFY an installed file first, so the refusal and the
+# --force overwrite are both proven on real content (not a no-op re-copy)
+printf 'MY LOCAL EDITS\n' > "$T/CLAUDE.md"
+out="$(bash "$DIST/install.sh" "$T" 2>&1)"; chk "install: refuses to clobber without --force" "$?" 1
+case "$out" in *"does not merge"*) ok "install: refusal warns overwrite does not merge";; *) no "install: refusal warns overwrite does not merge" "$out" "does not merge";; esac
+case "$out" in *CLAUDE.md*) ok "install: refusal names the clashing file";; *) no "install: refusal names the clashing file" "$out" "CLAUDE.md";; esac
+grep -qF 'MY LOCAL EDITS' "$T/CLAUDE.md" && ok "install: refusal left local file untouched" || no "install: refusal left local file untouched" "overwritten" "kept"
 bash "$DIST/install.sh" --force "$T" >/dev/null 2>&1; chk "install: --force overwrites"                 "$?" 0
+grep -qF 'MY LOCAL EDITS' "$T/CLAUDE.md" && no "install: --force restored template CLAUDE.md" "local content kept" "template" || ok "install: --force restored template CLAUDE.md"
 n=$(grep -cxF '.harness/' "$T/.gitignore"); chk "install: .harness/ not duplicated on re-run" "$n" 1
 
 # .gitattributes append must not corrupt a pre-existing file with no final newline
