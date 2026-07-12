@@ -76,6 +76,17 @@ schtasks /Create /TN migrate-resume /SC DAILY /ST 03:10 /TR ^
 
 **Cloud routine** — if the repo is on GitHub, schedule a cloud agent for just
 after the reset that pulls, runs `kick-loop.sh --drive`, and pushes. No local
-machine required.
+machine required — BUT the runner must have a **persistent workspace/volume**
+(or archive-and-restore the working tree between invocations). "State lives on
+disk" includes the parts a push does NOT carry: uncommitted mid-slice work
+after a usage-limit interruption, and the local `.harness/` state
+(`last-gate-failure.txt`, idle-ticks, slice-state, the gate proof). An
+ephemeral runner that only `git pull`s silently discards all of that — the
+next tick re-does or, worse, half-trusts lost work. If a persistent workspace
+is impossible, at minimum `tar` the worktree + `.harness/` to durable storage
+at the end of each invocation and restore it at the start of the next.
 
-Stop the schedule once `HANDOFF.md` shows the migration has terminated.
+Stop the schedule when a run exits with a terminal state — 0 (COMPLETE),
+10 (BLOCKED), or 20 (FAILED); `kick-loop.sh --check` prints it any time
+(`STATE: done:COMPLETE` etc.). Exit 70 means `--review` wants a human to look
+before the loop continues.

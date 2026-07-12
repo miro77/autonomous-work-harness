@@ -19,6 +19,9 @@ echo "HARNESS_FROZEN = ${HARNESS_FROZEN:-<unset>}"
 echo "HARNESS_LOCKED = ${HARNESS_LOCKED:-<unset>}"
 echo "MAX_CALLS/TICK = ${HARNESS_MAX_CALLS_PER_TICK:-0}"
 echo "LOOP_THRESH    = ${HARNESS_LOOP_THRESHOLD:-3} (window ${HARNESS_LOOP_WINDOW:-6})"
+echo "PROFILE        = ${HARNESS_PROFILE:-migration}"
+echo "ORACLE         = ${HARNESS_ORACLE:-none}"
+echo "(HARNESS_* path lists are space-separated: paths containing spaces are unsupported)"
 
 echo
 echo "=== setup ==="
@@ -69,6 +72,15 @@ if [ -f "$pgc" ] && grep -qE '^## PROPOSAL' "$pgc" 2>/dev/null; then
   echo "gate proposals: PENDING ($n) — a human must apply $pgc, then re-gate. Migration is not done while open."
 else
   echo "gate proposals: none"
+fi
+
+# Terminal state: HANDOFF.md is a validated claim, not a marker file.
+if [ -f migration/HANDOFF.md ]; then
+  if _cc="$(bash migration/tools/check-complete.sh 2>&1)"; then
+    echo "handoff      : $(printf '%s\n' "$_cc" | head -n 1) (validated)"
+  else
+    echo "handoff      : PRESENT but INVALID - $(printf '%s\n' "$_cc" | head -n 1)"
+  fi
 fi
 
 # Unfilled <...> placeholders in the docs the operator is expected to fill.

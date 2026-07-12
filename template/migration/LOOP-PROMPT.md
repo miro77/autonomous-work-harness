@@ -45,5 +45,7 @@ command — follow the AUTONOMY rule in SINGLE-TICK-PROMPT.md
 stop for any other reason, instead select the next unfinished row, checkpoint to
 disk, and schedule the next tick.
 
-END THE LOOP when TERMINATION has written and committed migration/HANDOFF.md:
-report it and stop scheduling ticks.
+END THE LOOP when TERMINATION has written and committed migration/HANDOFF.md
+and `bash migration/tools/check-complete.sh` accepts it (it prints STATUS:
+COMPLETE, BLOCKED, or FAILED): report that terminal state and stop scheduling
+ticks.

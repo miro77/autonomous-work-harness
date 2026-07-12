@@ -40,10 +40,15 @@ The PreCompact hook reminds you to flush; this gives you the place to flush TO.
 
 TICK PROCEDURE — exactly one unit of work:
 
-1. If row B01 (bootstrap) is not audited-pass, execute Phase 0 of
-   migration/PLAN.md — that is the whole tick.
-2. Otherwise run /migrate-slice (it picks the next row itself: unfinished rows
-   first, then the first open row with satisfied dependencies).
+1. Read HARNESS_PROFILE from migration/harness.env (default: migration). It
+   selects the status board and slice command — migration:
+   migration/parity-matrix.md + /migrate-slice; feature:
+   migration/spec-matrix.md + /feature-slice. If the bootstrap row (B01 on
+   the parity matrix; S00 on the spec matrix) is not audited-pass, execute
+   Phase 0 of migration/PLAN.md — that is the whole tick.
+2. Otherwise run the profile's slice command (it picks the next row itself:
+   unfinished rows first, then the first open row with satisfied
+   dependencies).
 3. Gates and audit are part of the slice command; never mark a row
    audited-pass without a fresh-context audit and a recorded gates run.
 4. If the selected row is blocked on a PENDING decision in
@@ -88,10 +93,17 @@ backstop still forces a stop to avoid a spin; if it fires with open ledger rows,
 HANDOFF must list them as the reason work remains.)
 
 When both axes are clear (or the idle backstop fires), write migration/HANDOFF.md
-summarizing all audited-fail rows, any open integration-ledger rows, pending
-decisions, and any open entries in migration/PROPOSED-GATE-CHANGES.md (the
-migration is not truly done while a needed gate change is unapplied), run
-`bash migration/tools/gates.sh`, and commit it (`migrate HANDOFF: done`).
+whose FIRST LINE is its machine-readable terminal state:
+`STATUS: COMPLETE` (every row audited-pass, ledger fully wired, NO open
+PROPOSED-GATE-CHANGES entries), `STATUS: BLOCKED` (blocked rows, blocked
+ledger rows, or open gate proposals remain — an open proposal CAPS the state
+at BLOCKED, never claim COMPLETE past one), or `STATUS: FAILED` (audited-fail
+rows remain). Below that line, summarize all audited-fail rows, open
+integration-ledger rows, pending decisions, and open PROPOSED-GATE-CHANGES
+entries. Run `bash migration/tools/gates.sh`, commit it
+(`migrate HANDOFF: done`), then verify the claim with
+`bash migration/tools/check-complete.sh` — if it rejects the record, fix and
+re-commit: the driver refuses an invalid handoff.
 If gates cannot pass because audited-fail rows remain, commit with a subject
 containing `audited-fail` (e.g. `migrate HANDOFF: audited-fail rows remain`)
 so the recorded-checkpoint escape covers the stop.

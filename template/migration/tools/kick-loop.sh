@@ -8,7 +8,7 @@
 # account/usage-limit resets — a run that hits the cap simply no-ops, and the
 # next scheduled run (after the limit resets) continues where it stopped.
 #
-#   kick-loop.sh [--drive|--tick] [--review] [--prompt FILE] [--check]
+#   kick-loop.sh [--drive|--tick] [--review|--review-log-only] [--prompt FILE] [--check]
 #
 # Modes:
 #   (default)  one headless run of migration/LOOP-PROMPT.md — a single session
@@ -21,24 +21,33 @@
 #              HARNESS_MAX_TICKS (default 50) ticks are spent. Recommended for
 #              unattended runs: no session accumulates context, so quality does
 #              not degrade over a long migration.
-#   --review   (with --drive) pause after any tick whose commit subject contains
-#              'audited-fail' or 'split into sub-slices' — the human-in-the-loop
-#              gate. Wait for Enter on a TTY, or log and continue headless.
+#   --review   (with --drive) stop for a human after any tick whose commit
+#              subject contains 'audited-fail' or 'split into sub-slices'.
+#              On a TTY it waits for Enter; HEADLESS it exits 70 so a
+#              scheduler cannot silently sail past the review point.
+#   --review-log-only  like --review but headless it only logs and continues
+#              (the old behavior, for schedulers that alert on logs).
 #   --prompt FILE overrides the mode's default prompt file.
 #
-# Completion is signalled by migration/HANDOFF.md, which the migration writes
-# on termination. While it is absent there is work to resume; once present this
-# no-ops (delete it to force another round).
+# Completion is signalled by migration/HANDOFF.md — but its mere existence is
+# NOT trusted: check-complete.sh validates it (tracked, clean, boards
+# consistent) and classifies the terminal state. Delete it to force another
+# round.
 #
 # Exit codes:
-#   0  = advanced and the tree is gate-covered, or already complete, or skipped,
+#   0  = advanced and the tree is gate-covered, or skipped, or terminated
+#        COMPLETE (every row audited-pass, ledger wired, no open proposals),
 #        or (--drive) the tick budget was spent with state clean on disk
+#   10 = terminated BLOCKED — human decisions remain (blocked rows/ledger
+#        rows or open PROPOSED-GATE-CHANGES entries)
+#   20 = terminated FAILED — audited-fail rows remain; a human must look
 #   64 = (--drive) two consecutive ticks changed nothing and no HANDOFF.md was
 #        written — the loop is stuck; inspect
-#   65 = a run finished (claude exit 0) but the end state needs inspection:
-#        the tree is NOT covered by a gate proof (the Stop verifier blocked),
-#        or (--drive) HANDOFF.md was written but never committed — the
-#        termination record is not in git
+#   65 = needs inspection: a run finished but the tree is NOT gate-covered,
+#        or HANDOFF.md exists/was written but is not a VALID termination
+#        record (untracked, modified, bad STATUS line, boards inconsistent)
+#   70 = (--drive --review, headless) review required: an audited-fail or
+#        row-split commit landed; state is checkpointed — re-run to continue
 #   75 = stopped on a usage limit; the next scheduled run after reset continues
 #   2  = cannot run (not a harness / bad args / no claude CLI)
 #   *  = claude's own non-zero exit for a real error
@@ -56,7 +65,7 @@ _env_lock_ttl="${HARNESS_LOCK_TTL_MIN:-}"
 HARNESS_MAX_TICKS="${_env_max_ticks:-${HARNESS_MAX_TICKS:-}}"
 HARNESS_LOCK_TTL_MIN="${_env_lock_ttl:-${HARNESS_LOCK_TTL_MIN:-}}"
 
-prompt=""; check=0; mode="loop"; review=0
+prompt=""; check=0; mode="loop"; review=0; review_log_only=0
 setmode(){
   [ "$mode" = "loop" ] || { echo "kick-loop: --tick and --drive are mutually exclusive" >&2; exit 2; }
   mode="$1"
@@ -69,6 +78,7 @@ while [ $# -gt 0 ]; do
     --tick)   setmode tick;  shift ;;
     --drive)  setmode drive; shift ;;
     --review) review=1; shift ;;
+    --review-log-only) review=1; review_log_only=1; shift ;;
     --check)  check=1; shift ;;
     *) echo "kick-loop: unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -81,16 +91,42 @@ if [ -z "$prompt" ]; then
 fi
 
 done_marker="migration/HANDOFF.md"
-[ -e "$done_marker" ] && state="done" || state="resume"
+# A handoff's mere existence is NOT completion: an accidentally created or
+# edited HANDOFF.md must not silently no-op every future scheduled run. The
+# claim is validated (tracked, clean, boards consistent) and classified into
+# a machine-readable terminal state by check-complete.sh.
+term_status=""; ccout=""
+if [ -e "$done_marker" ]; then
+  if ccout="$(bash migration/tools/check-complete.sh 2>&1)"; then
+    term_status="$(printf '%s\n' "$ccout" | sed -n 's/^STATUS: //p' | head -n 1)"
+    state="done:$term_status"
+  else
+    state="invalid-handoff"
+  fi
+else
+  state="resume"
+fi
 
 if [ "$check" -eq 1 ]; then
   echo "STATE: $state"
   exit 0
 fi
-if [ "$state" = "done" ]; then
-  echo "kick-loop: migration loop already terminated ($done_marker present) — nothing to resume."
-  echo "  Delete $done_marker to force another round."
-  exit 0
+term_exit(){
+  case "$1" in
+    COMPLETE) echo "kick-loop: terminated COMPLETE — all rows audited-pass, ledger wired, no open proposals. Delete $done_marker to force another round."; exit 0 ;;
+    BLOCKED)  echo "kick-loop: terminated BLOCKED — human decisions remain (see $done_marker)."; exit 10 ;;
+    FAILED)   echo "kick-loop: terminated FAILED — audited-fail rows remain (see $done_marker)."; exit 20 ;;
+    *)        echo "kick-loop: unrecognized terminal state '$1' — inspect $done_marker." >&2; exit 65 ;;
+  esac
+}
+if [ "$state" = "invalid-handoff" ]; then
+  echo "kick-loop: $done_marker exists but is NOT a valid termination record:" >&2
+  printf '%s\n' "$ccout" >&2
+  echo "  Fix or delete $done_marker; refusing to treat this as done." >&2
+  exit 65
+fi
+if [ -n "$term_status" ]; then
+  term_exit "$term_status"
 fi
 
 # Validate the prompt file before locking or invoking anything, so a bad
@@ -105,7 +141,15 @@ ttl_min="${HARNESS_LOCK_TTL_MIN:-360}"
 mkdir -p .harness
 if ! mkdir "$lock" 2>/dev/null; then
   if [ -n "$(find "$lock" -maxdepth 0 -mmin +"$ttl_min" 2>/dev/null)" ]; then
-    echo "kick-loop: recovering stale lock ($lock older than ${ttl_min}m)." >&2
+    # Age alone is not proof of death: a tick can legitimately run longer
+    # than the TTL. Only recover when the recorded owner is also GONE —
+    # otherwise a second driver starts concurrently with a live one.
+    ownerpid="$(sed -n 's/^pid=\([0-9][0-9]*\).*/\1/p' "$lock/meta" 2>/dev/null | head -n 1)"
+    if [ -n "$ownerpid" ] && kill -0 "$ownerpid" 2>/dev/null; then
+      echo "kick-loop: lock is older than ${ttl_min}m but owner pid $ownerpid is ALIVE — not recovering; skipping this fire."
+      exit 0
+    fi
+    echo "kick-loop: recovering stale lock ($lock older than ${ttl_min}m, owner${ownerpid:+ pid $ownerpid} gone)." >&2
     rm -rf "$lock"
     mkdir "$lock" 2>/dev/null || { echo "kick-loop: could not take lock after recovery — skipping." >&2; exit 0; }
   else
@@ -113,8 +157,13 @@ if ! mkdir "$lock" 2>/dev/null; then
     exit 0
   fi
 fi
-trap 'rm -rf "$lock" 2>/dev/null' EXIT
 printf 'pid=%s started=%s\n' "$$" "$(date -u +%FT%TZ 2>/dev/null || echo now)" > "$lock/meta" 2>/dev/null || true
+# Heartbeat: refresh the lock mtime while THIS process lives — a single tick
+# can run longer than the TTL, and the per-tick touch is not enough. Stale
+# recovery above requires BOTH an old mtime AND a dead owner pid.
+( while kill -0 "$$" 2>/dev/null; do touch "$lock" 2>/dev/null || true; sleep 60; done ) >/dev/null 2>&1 &
+hb_pid=$!
+trap 'kill "$hb_pid" 2>/dev/null; rm -rf "$lock" 2>/dev/null' EXIT
 
 command -v claude >/dev/null 2>&1 || {
   echo "kick-loop: the 'claude' CLI must be on PATH to drive the loop headlessly." >&2
@@ -195,15 +244,17 @@ while :; do
       echo "kick-loop: migration terminated ($done_marker written) but the final tick reported $rc — inspect." >&2
       exit "$rc"
     fi
-    # The termination record must be IN git (the tick prompt requires the
-    # commit): an untracked or modified HANDOFF.md is an end state nobody
-    # reviewed and no other machine will see — flag it, don't bless it.
-    if [ -n "$(git status --porcelain -- "$done_marker" 2>/dev/null)" ]; then
-      echo "kick-loop: $done_marker was written but is NOT committed — the termination record is not in git; inspect and commit it." >&2
+    # The termination claim is validated, not trusted: tracked + clean +
+    # boards consistent + a machine-readable STATUS line (check-complete.sh),
+    # then mapped to a distinct exit code per terminal state.
+    if ! ccout="$(bash migration/tools/check-complete.sh 2>&1)"; then
+      echo "kick-loop: $done_marker was written but is NOT a valid termination record:" >&2
+      printf '%s\n' "$ccout" >&2
       exit 65
     fi
-    echo "kick-loop: migration terminated ($done_marker committed) after $tick tick(s)."
-    exit 0
+    term_status="$(printf '%s\n' "$ccout" | sed -n 's/^STATUS: //p' | head -n 1)"
+    echo "kick-loop: migration terminated after $tick tick(s)."
+    term_exit "$term_status"
   fi
   [ "$rc" -eq 0 ] || exit "$rc"
   # Human-in-the-loop: --review pauses after a tick whose commit is an
@@ -218,8 +269,11 @@ while :; do
           printf '  Press Enter to continue, s to skip future reviews, Ctrl+C to stop: '
           read -r ans </dev/tty 2>/dev/null || true
           [ "${ans:-}" = "s" ] && review=0
+        elif [ "$review_log_only" -eq 1 ]; then
+          echo "kick-loop: [REVIEW] last tick committed '$subject' — --review-log-only, continuing"
         else
-          echo "kick-loop: [REVIEW] last tick committed '$subject' — no TTY, continuing (run --review interactively to pause)"
+          echo "kick-loop: [REVIEW] review required: last tick committed '$subject' — no TTY, stopping so a human can look. State is checkpointed; re-run to continue, or use --review-log-only to log without stopping." >&2
+          exit 70
         fi
         ;;
     esac
