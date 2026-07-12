@@ -35,7 +35,12 @@ Prefer to do it by hand? `cp -r /path/to/.../template/. .`, then
 This is the one file the hooks and scripts read. Settings:
 
 - **`HARNESS_SCOPE`** — the paths whose changes require a gate proof. Include
-  your new source tree, `migration`, `.claude`, and `CLAUDE.md`.
+  your new source tree, `migration`, `.claude`, and `CLAUDE.md` — **and the
+  gates' own inputs**: build/CI scripts, CI config files, vendored tool
+  binaries the gates execute, and the frozen oracle tree. A proof that does
+  not cover the programs that define the proof can be laundered by editing
+  those programs. Every entry must be stageable by git — an entry inside a
+  gitignored directory makes the hash tool fail closed (it names the entry).
 - **`HARNESS_FROZEN`** — path fragment(s) identifying the legacy oracle. Any
   edit under these is blocked. Point it at your legacy source (e.g.
   `legacy/src`, or `app/src model/src` for multiple).
@@ -132,6 +137,13 @@ any unfilled `<...>` placeholders, and — the useful one — whether the curren
 tree is **GATED** (covered by a recorded gate run), **STALE**, or has **NONE**.
 
 ## Sanity checks that the harness is live
+
+> **Bootstrap window.** Hooks load at session start, so the Claude Code
+> session that INSTALLS the harness is not yet governed by it — that session
+> can still edit `gates.sh`, the hooks, and `harness.env`. This is the
+> sanctioned moment to configure the locked files, whether a human or an
+> agent is doing the setup; they arm for every following session. Restart
+> after setup, then run these checks to confirm the hooks actually bite.
 
 - Try to `Edit` a file under your frozen path → blocked.
 - Change a file in scope, then end the turn without running gates → the Stop

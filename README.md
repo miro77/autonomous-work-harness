@@ -48,7 +48,7 @@ template/                 # copy this into your target repo
                           #   benchmark.sh, gui-capture.py, gui-compare.py
 ```
 
-**Docs:** [GETTING-STARTED.md](GETTING-STARTED.md) · [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) · [docs/ADAPTING.md](docs/ADAPTING.md) · [docs/FEATURE-PROFILE.md](docs/FEATURE-PROFILE.md)
+**Docs:** [GETTING-STARTED.md](GETTING-STARTED.md) · [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) · [docs/ADAPTING.md](docs/ADAPTING.md) · [docs/IN-PLACE-PROFILE.md](docs/IN-PLACE-PROFILE.md) · [docs/FEATURE-PROFILE.md](docs/FEATURE-PROFILE.md)
 
 ## Quick start
 
@@ -119,19 +119,28 @@ Goal: transform the existing code from <old dependency/framework/runtime> to
 
 Discover the rest from the repo during Phase 0 — do not ask:
 - the source paths that use <old dependency/framework/runtime> (set
-  HARNESS_SCOPE to "<source-paths> migration .claude CLAUDE.md AGENTS.md");
-  leave HARNESS_FROZEN empty — there is no separate legacy tree to freeze;
+  HARNESS_SCOPE to "<source-paths> migration .claude CLAUDE.md AGENTS.md",
+  PLUS the build/CI scripts, CI configs, and any vendored tool binaries the
+  gates execute — the proof must cover the gates' own inputs);
+  leave HARNESS_FROZEN empty — there is no separate legacy tree to freeze
+  (unless the repo vendors the old dependency's own sources: freeze those);
 - the FULL real project checks from the CI config and manifests — wire them into
   migration/tools/gates.sh and cite the CI file they came from.
 Record each discovered choice in migration/decisions.md as an assumption.
 
 Before editing each unit, capture its current behavior as fixtures from the base
-commit using probes in migration/fixtures/ or probes/.
+commit using probes in migration/fixtures/ or probes/. Tests-first: a unit gets
+a T-row (pin behavior with tests on unmigrated code, snapshot a baseline)
+before its M-row (the edit) — see docs/IN-PLACE-PROFILE.md.
 
 Fill CLAUDE.md and migration/parity-matrix.md so each row names one behavior to
 preserve, the fixture/probe that captures it, and the source paths to edit.
 Work one row at a time; no success claim without gates and fresh-context audit.
 ```
+
+The full playbook for this mode — baseline anti-deletion machinery,
+status-board validation, teardown-as-done, and the setup-review loop — is in
+[docs/IN-PLACE-PROFILE.md](docs/IN-PLACE-PROFILE.md).
 
 ### 3. New feature with the harness
 

@@ -21,10 +21,13 @@ self-paced single-session loop in
 > **In-place migration?** If you transform the existing code in place (remove a
 > dependency, swap a stdlib) rather than build a new tree, there is no separate
 > frozen legacy: leave `HARNESS_FROZEN` empty in
-> [`migration/harness.env`](migration/harness.env), edit the existing tree
-> directly, and capture fixtures from the pre-change code (a probe run at the base
-> commit). The table above shows the freeze-and-replace shape — adjust it to your
-> tree.
+> [`migration/harness.env`](migration/harness.env) (unless the repo vendors the
+> old dependency's own sources — freeze those as the semantics oracle), edit the
+> existing tree directly, and capture fixtures from the pre-change code (a probe
+> run at the base commit). Work tests-first: a unit gets a T-row (tests pinning
+> current behavior + a committed baseline snapshot) before its M-row (the edit).
+> The table above shows the freeze-and-replace shape — adjust it to your tree.
+> Full playbook: the harness repo's `docs/IN-PLACE-PROFILE.md`.
 
 ## Target architecture
 

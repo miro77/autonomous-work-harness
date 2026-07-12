@@ -12,10 +12,14 @@ migration*):
 
 - **In-place transform** — you edit the existing code to change what it's built on
   (e.g. remove a dependency) while preserving behavior. Put the edited tree in
-  `HARNESS_SCOPE`, leave `HARNESS_FROZEN` **empty**, and capture fixtures from the
-  pre-change code (a probe run at the base commit). If a shim you add shares a
-  path fragment with the frozen oracle, make the frozen fragment specific enough
-  to exclude it (plain substring match — freeze `legacy/vendor/VendorLib`, not `vendor/`).
+  `HARNESS_SCOPE`, leave `HARNESS_FROZEN` **empty** (unless the repo VENDORS the
+  dependency's own sources — then freeze those as the semantics oracle), and
+  capture fixtures from the pre-change code (a probe run at the base commit). If
+  a shim you add shares a path fragment with the frozen oracle, make the frozen
+  fragment specific enough to exclude it (plain substring match — freeze
+  `legacy/vendor/VendorLib`, not `vendor/`). The full battle-tested playbook — tests-first
+  T-row/M-row rows, baseline anti-deletion machinery, status-board validation,
+  teardown-as-done — is in [IN-PLACE-PROFILE.md](IN-PLACE-PROFILE.md).
 - **Freeze-and-replace** — legacy stays a live oracle and you build a new tree
   alongside it. Set `HARNESS_FROZEN` to the legacy path fragment(s); new
   legacy-stack code goes in `probes/` / your new tree.
@@ -140,6 +144,29 @@ the default runs the single-session loop prompt once. A run that hits the limit
 stops with exit 75 and the next scheduled run after the reset continues. See
 [`template/migration/RESUMING.md`](../template/migration/RESUMING.md)
 for the scheduling recipes.
+
+## Review the setup before slice 1
+
+The fresh-context audit inside the harness shares the model (and its blind
+spots) with the agent that configured it. Before the first real slice, have a
+**different model/vendor** adversarially review the configured harness. On a
+real migration this found four blockers the internal audit had passed: the
+proof hash not covering the gates' own inputs (build scripts, CI configs, the
+checker binary), a unit missing from the status board (a shell-alias bug in
+the discovery scan), a format checker blind to the most likely corruption,
+and a deletable oracle.
+
+Shape the prompt like this: state what was configured and where; forbid the
+expensive full gate run; demand file:line evidence and a severity-ranked
+findings list; and point the reviewer at the trust chain, not the file list —
+"can any gate pass without proving what it claims?", "can the oracle be
+deleted, emptied, or renamed while gates stay green?", "which prose rules are
+not machine-checked?". Route locked-file fixes through
+`PROPOSED-GATE-CHANGES.md`, fix unlocked files directly, then have the
+reviewer **re-review the applied state** — a remediation can open new holes
+(a real fix for guard false-positives introduced a bypass the second review
+caught). Make sure re-reviews run against the branch HEAD, not a stale
+sandbox snapshot.
 
 ## Template, not a generator
 

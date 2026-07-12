@@ -29,6 +29,17 @@ open proposal.
 2. **Human** — apply the edit to the locked file, run `bash migration/tools/gates.sh`
    to re-record the proof, then delete the applied `## PROPOSAL` entry and commit.
 
+For anything beyond a one-line edit, the ergonomics that worked in the field:
+the agent prepares a **pre-validated apply bundle** in a scratch directory —
+one script that applies every open proposal with exact-anchor patches that
+FAIL LOUDLY on mismatch (no silent partial application), then self-tests the
+result (syntax checks, behavior regression cases for guards, standalone runs
+of new gate scripts). The agent rehearses the bundle against COPIES of the
+locked files first (reading them is allowed), and the human runs one command.
+This keeps "a human applies it" from decaying into rubber-stamping a wall of
+diffs — the review already happened when the proposal was written, and the
+bundle proves the patch does exactly that.
+
 ## Open proposals
 
 _None yet._ Add each as a `## PROPOSAL: short title` heading below this line (at
