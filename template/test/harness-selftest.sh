@@ -568,6 +568,8 @@ FAKE
 chk "kick-loop: --drive respects HARNESS_MAX_TICKS" "$( HARNESS_MAX_TICKS=2 KL --drive >/dev/null 2>&1; echo $? )" 0
 chk "kick-loop: --drive spent exactly the tick budget" "$(calls)" 2
 rm -f calls.log; rm -rf .harness
+chk "kick-loop: --max requires --drive" "$( KL --max 1 >/dev/null 2>&1; echo $? )" 2
+chk "kick-loop: --max rejects non-numeric values" "$( KL --drive --max nope >/dev/null 2>&1; echo $? )" 2
 
 # HARNESS_MAX_TICKS set in harness.env must take effect (kick-loop sources the
 # config like every other consumer of HARNESS_* settings)...
@@ -578,6 +580,9 @@ rm -f calls.log; rm -rf .harness
 # ...and an explicit environment variable on the invocation still wins.
 chk "kick-loop: env HARNESS_MAX_TICKS overrides harness.env" "$( HARNESS_MAX_TICKS=1 KL --drive >/dev/null 2>&1; echo $? )" 0
 chk "kick-loop: env-override tick budget spent (1)" "$(calls)" 1
+rm -f calls.log; rm -rf .harness
+chk "kick-loop: --max overrides harness.env" "$( KL --drive --max 2 >/dev/null 2>&1; echo $? )" 0
+chk "kick-loop: --max tick budget spent (2)" "$(calls)" 2
 rm -f calls.log; rm -rf .harness
 cd /; rm -rf "$R"
 

@@ -40,6 +40,33 @@ The PreCompact hook reminds you to flush; this gives you the place to flush TO.
 
 TICK PROCEDURE — exactly one unit of work:
 
+0. CONCURRENT-WRITER CHECK — before touching anything.
+   Confirm nothing else is writing this tree: `git log`, `git status`, and the
+   driver lock (`.harness/kick-loop.lock`).
+
+   ⚠️ A MOVING HEAD IS NOT THE SIGNAL, AND IT IS NOT EVEN THE LIKELY ONE. The
+   realistic second writer never commits — it mutates the WORKING TREE. This
+   has really happened: a live session and an ORPHANED tick (a `claude -p`
+   child that outlived the driver that spawned it) both wrote the same tree.
+   The orphan created scratch files, `git restore`d the tick's uncommitted
+   matrix claim, and wrote an `audited-pass` status for code no auditor had
+   ever seen.
+
+   So ALSO snapshot the scoped tree at the start
+   (`bash migration/tools/working-tree-hash.sh`) and RE-CHECK IT BEFORE YOU
+   COMMIT. If files you did not touch have appeared, vanished, or reverted,
+   you are not alone in the tree:
+     - commit what you have with an HONEST status,
+     - write HANDOFF.md saying who else is writing,
+     - stop.
+   NEVER spawn a subagent into a contested tree: a `git checkout` from the
+   other writer destroys uncommitted work while the subagent is mid-run.
+
+   A dirty tree you did not create is ALSO this signal — do not "clean it up".
+   Read it first. Reverting a fixture generator orphans the fixtures it
+   produced: they become unreproducible, and that is not recoverable from the
+   tree alone.
+
 1. Read HARNESS_PROFILE from migration/harness.env (default: migration). It
    selects the status board and slice command — migration:
    migration/parity-matrix.md + /migrate-slice; feature:
@@ -51,6 +78,23 @@ TICK PROCEDURE — exactly one unit of work:
    dependencies).
 3. Gates and audit are part of the slice command; never mark a row
    audited-pass without a fresh-context audit and a recorded gates run.
+
+   ⚠️ ORDER MATTERS, NOT JUST THE FACTS. NEVER WRITE `audited-pass` INTO A ROW
+   BEFORE THE FRESH-CONTEXT AUDITOR HAS ACTUALLY RUN AND RETURNED. Not "gates
+   are green and I'm confident". Not "I ran my own mutation tests". Not "the
+   evidence cell says audit pending". The STATUS FIELD is the one thing
+   downstream ticks trust WITHOUT re-checking, so writing it early is a
+   FABRICATED CLAIM — even if the audit later agrees, which is luck, not
+   process. If it had disagreed, the matrix would contain a lie. Gates are not
+   an audit. Self-run mutation evidence is not an audit.
+
+3b. A ROW'S "GATED ON X" NOTE IS A CLAIM, NOT EVIDENCE — AND THESE NOTES ROT.
+   They were written before X landed. On a real migration, THREE separate rows
+   were found gated on runtime that had been ported long ago; one row was not
+   blocked at all. Before you skip a row as blocked, GREP FOR X AND CONFIRM IT
+   IS STILL MISSING. A stale gate note is the single biggest source of a false
+   "nothing is actionable" — and a loop that believes it will write HANDOFF.md
+   and stop while dozens of slices are actually ready.
 4. If the selected row is blocked on a PENDING decision in
    migration/decisions.md, apply the recorded default assumption if one
    exists. Otherwise record the block in its matrix row and end the tick —

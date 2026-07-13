@@ -1,0 +1,18 @@
+--- a/template/.claude/settings.json
++++ b/template/.claude/settings.json
+@@ -7,7 +7,14 @@
+       "Bash(bash migration/tools/check-docs.sh:*)",
+       "Bash(bash migration/tools/persist-state.sh:*)",
+       "Bash(bash migration/tools/read-state.sh:*)",
+-      "Bash(bash migration/tools/benchmark.sh:*)"
++      "Bash(bash migration/tools/benchmark.sh:*)",
++      "Edit(migration/**)",
++      "Write(migration/**)",
++      "Edit(<TARGET_TREE>/**)",
++      "Write(<TARGET_TREE>/**)",
++      "Edit(<FIXTURE_GENERATOR>/**)",
++      "Write(<FIXTURE_GENERATOR>/**)",
++      "Bash(<RUN_FIXTURE_GENERATOR>:*)"
+     ]
+   },
+   "hooks": {

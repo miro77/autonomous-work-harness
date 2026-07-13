@@ -24,8 +24,9 @@ driver with three modes:
   accumulates history; each tick reads its state from disk and checkpoints
   back to disk. Stops cleanly on the tick budget (`HARNESS_MAX_TICKS`,
   default 50 per run — set it in [`harness.env`](harness.env); an environment
-  variable on the invocation overrides it), and with exit `64` if two
-  consecutive ticks change nothing without writing `HANDOFF.md`.
+  variable on the invocation overrides it; `--max N` overrides it for one
+  invocation), and with exit `64` if two consecutive ticks change nothing
+  without writing `HANDOFF.md`.
 - **`--drive --review`** — same as `--drive`, but pauses after any tick whose
   commit is an `audited-fail` or a row-split — the human-in-the-loop gate.
   On a TTY it waits for Enter (press `s` to skip future reviews); headless it
@@ -49,6 +50,73 @@ All modes share the same behavior around completion and limits:
 Requires the Claude Code CLI on `PATH`. `kick-loop.sh --check` reports whether
 there is work to resume (`STATE: resume` / `STATE: done`) without invoking
 anything — handy for a scheduler guard.
+
+## ⚠️ The orphaned tick — read this before you ever Ctrl-C the driver
+
+`kick-loop.sh` runs the tick as `out="$(claude -p …)"`, which forks a subshell
+whose pid the driver never learns. **Kill the driver and its `claude -p` child is
+ORPHANED**: it keeps writing the working tree with nobody supervising it. It will
+race the next tick, race a live session, and produce work that was never gated or
+audited.
+
+This is not theoretical. On a real migration, orphans ran ~40 minutes unattended,
+created scratch files in a tick's tree, `git restore`d another tick's uncommitted
+claim, and wrote an `audited-pass` status for code no auditor had seen. Four
+separate orphans accumulated over one session.
+
+A bash reaper (background the child, record `$!`, trap `EXIT/INT/TERM`) was tried
+and **reverted**: under MinGW, backgrounding a Windows `.exe` and `wait`-ing on it
+makes the child die with **SIGTERM (143) on every start**, so the driver could not
+run at all. A deterministic "won't start" is worse than a hazard that only bites
+when you kill it.
+
+**So: do not kill the driver mid-tick.** Let it finish, or bound it with `--max`.
+On Windows, use the supervisor below, which reaps orphans properly. If you must
+stop it by hand, kill the `claude` child too and **wait for the tree to go static
+before touching anything** — then READ any uncommitted work before reverting a
+byte of it. Reverting a fixture generator orphans the fixtures it produced; they
+become unreproducible.
+
+**A live agent session and the driver must never share a branch.** Both write the
+tree; the session's Stop hook demands a gate-covered tree at every turn boundary
+while the driver keeps it dirty for an hour. Every escape from that deadlock
+damages something.
+
+## Windows: `migration/run-loop.ps1` (recommended)
+
+```powershell
+.\migration\run-loop.ps1                          # 30 slices, 10 per batch
+.\migration\run-loop.ps1 -MaxSlices 5 -Batch 5
+.\migration\run-loop.ps1 -LimitWaitMin 45 -Review
+```
+
+A PowerShell supervisor around `kick-loop.sh --drive`. PowerShell can track a
+Windows process tree, so it fixes what bash on MinGW cannot:
+
+- **Reaps orphaned ticks** — before the run, after every batch, and in a `finally`
+  block, so even Ctrl-C cannot leak one. It passes a repo-marked tick prompt and
+  matches that marker, never a bare `-p`, so it can kill neither your interactive
+  session nor an unrelated headless `claude -p` of your own.
+- **Resolves Git Bash explicitly.** `bash` on a Windows PATH is usually
+  `C:\Windows\system32\bash.exe` (WSL), which cannot see `claude.exe` and reports
+  *"the 'claude' CLI must be on PATH"* — a misdiagnosis. It refuses any shell whose
+  `uname` is not MINGW/MSYS, and checks that claude is visible **to that shell**,
+  which is the check that actually matters.
+- **Refuses to start on a dirty tree** (unless `-Force`). An uncommitted scoped
+  change is indistinguishable from a rogue writer.
+- **Retries only what is safe to retry.** A usage limit (75) is a *pause* — it waits
+  and resumes. A crash on a **clean** tree is transient — bounded backoff. A crash
+  on a **dirty** tree, or the loop's own `10`/`20`/`64`/`65`/`70` signals, **stop for
+  a human**: re-running compounds the damage.
+
+⚠️ It is a **launcher, not a gate**. It lives outside `migration/tools/`, so an agent
+can edit it — it is not a trust boundary. `gates.sh`, the Stop hook and the proof
+are `HARNESS_LOCKED` and run unchanged; the supervisor only decides *when* to invoke
+the driver. Move it into `migration/tools/` yourself if you want it locked too.
+
+**After ANY hand-edit or `git apply` under a scoped path — gate and commit before
+starting the driver.** An uncommitted scoped change looks exactly like a rogue
+writer, and will abort the tick you just started.
 
 ## Scheduling it
 

@@ -224,3 +224,66 @@ This turns the binary gate (pass/fail at turn end) into a **self-correcting
 loop**: the model sees the actual diagnostic (which test failed, what the lint
 error was), not just "you failed." The file is cleared on success, so its
 presence is the signal that the last tick failed its gates.
+
+## 13. The code is usually right. The EVIDENCE is what fails.
+
+This is the most expensive lesson the harness has learned, and it inverts the
+intuition everyone starts with.
+
+On a real migration hardened against this harness, roughly **40 audit blockers
+were raised across a dozen slices. Nearly every one was an EVIDENCE defect, not
+a code defect.** The port was faithful on the first pass, again and again. What
+kept failing was **the fixture's ability to tell a correct port apart from a
+plausible WRONG one**. One slice needed nine fresh-context audits; another
+needed seven. Every blocker in both was an evidence defect. Zero were code
+defects.
+
+So the interesting question is never "is my port right?" It is: **would a WRONG
+port also pass this golden?** And you do not get to answer that by thinking.
+
+### Rule 1 — build the wrong port yourself and RUN it
+
+Before you write a claim into an evidence cell, construct the plausible wrong
+port, run the fixture against it, and confirm it dies. Do this for every claim
+— **including a claim an auditor hands you.** Auditors caught five false claims
+that had been written into evidence cells on faith; one of them was backwards,
+and it had been sheltering a live wrong port for three audits.
+
+**Corollary: a mutation you have not PROVEN hit the code under test is not
+evidence.** A mutation patch once anchored on a string that was byte-identical
+in a *different* class, silently mutated the wrong one, and reported the wrong
+port as "unkillable" — which was nearly recorded as fact. Assert the anchor
+matches exactly once before you trust the result.
+
+### Rule 2 — "it cannot be observed" is a CLAIM, not a proof
+
+It is precisely where wrong ports hide. A deviation resting on *"re-evaluating
+an unchanged set emits nothing"* survived three audits before someone noticed a
+re-entrant callback leaves the state CLEAN-but-STALE — so the premise was false,
+and two wrong ports had been living inside it. Check for unstated premises: one
+"provably equivalent" proof silently depended on a *different* deviation holding.
+
+### Rule 3 — an inertness argument that rests on a DEFERRAL has an EXPIRY DATE
+
+"Unobservable because its only consumers are deferred" is a statement about
+TODAY. It expires the moment any consumer lands.
+
+This is how the one real code defect got through: a field was seeded wrongly, but
+every consumer of it was deferred, so no golden could reach it — and the slice
+passed its audit legitimately. Three slices later, a new slice made that field
+*synced*, and the very first golden killed it. **When a slice un-defers a
+consumer, re-audit every field that consumer reads.**
+
+### The technique that actually works: close the CLASS, not the instance
+
+Fixing the reported hole one case at a time loses — each fix closes the reported
+hole and opens the next, nine times running. What finally worked was making
+**every recorder stamp the COMPLETE argument list of EVERY callback into ONE
+shared, ordered log.** Not counts. Not selected fields. The whole tuple, in
+sequence, across all callbacks.
+
+Wrong ports that had survived an entire 969-test suite then died instantly: a
+kill dealing current HP instead of max HP; a fan-out dropping its damage types;
+four variants of passing the wrong actor as `self`. The order across actors and
+across triggers is as load-bearing as the values — in one system, callback order
+*is* ownership.

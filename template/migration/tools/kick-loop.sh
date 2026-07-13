@@ -8,7 +8,7 @@
 # account/usage-limit resets — a run that hits the cap simply no-ops, and the
 # next scheduled run (after the limit resets) continues where it stopped.
 #
-#   kick-loop.sh [--drive|--tick] [--review|--review-log-only] [--prompt FILE] [--check]
+#   kick-loop.sh [--drive|--tick] [--max N] [--review|--review-log-only] [--prompt FILE] [--check]
 #
 # Modes:
 #   (default)  one headless run of migration/LOOP-PROMPT.md — a single session
@@ -21,6 +21,7 @@
 #              HARNESS_MAX_TICKS (default 50) ticks are spent. Recommended for
 #              unattended runs: no session accumulates context, so quality does
 #              not degrade over a long migration.
+#   --max N    with --drive, override HARNESS_MAX_TICKS for this invocation.
 #   --review   (with --drive) stop for a human after any tick whose commit
 #              subject contains 'audited-fail' or 'split into sub-slices'.
 #              On a TTY it waits for Enter; HEADLESS it exits 70 so a
@@ -67,7 +68,7 @@ _env_lock_ttl="${HARNESS_LOCK_TTL_MIN:-}"
 HARNESS_MAX_TICKS="${_env_max_ticks:-${HARNESS_MAX_TICKS:-}}"
 HARNESS_LOCK_TTL_MIN="${_env_lock_ttl:-${HARNESS_LOCK_TTL_MIN:-}}"
 
-prompt=""; check=0; mode="loop"; review=0; review_log_only=0
+prompt=""; check=0; mode="loop"; review=0; review_log_only=0; max_arg=""
 setmode(){
   [ "$mode" = "loop" ] || { echo "kick-loop: --tick and --drive are mutually exclusive" >&2; exit 2; }
   mode="$1"
@@ -79,12 +80,21 @@ while [ $# -gt 0 ]; do
       prompt="$2"; shift 2 ;;
     --tick)   setmode tick;  shift ;;
     --drive)  setmode drive; shift ;;
+    --max)
+      [ -n "${2:-}" ] || { echo "kick-loop: --max needs a positive integer argument" >&2; exit 2; }
+      case "$2" in ''|*[!0-9]*) echo "kick-loop: --max needs a positive integer argument" >&2; exit 2 ;; esac
+      [ "$2" -gt 0 ] || { echo "kick-loop: --max needs a positive integer argument" >&2; exit 2; }
+      max_arg="$2"; shift 2 ;;
     --review) review=1; shift ;;
     --review-log-only) review=1; review_log_only=1; shift ;;
     --check)  check=1; shift ;;
     *) echo "kick-loop: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+if [ -n "$max_arg" ] && [ "$mode" != "drive" ]; then
+  echo "kick-loop: --max only applies with --drive" >&2
+  exit 2
+fi
 if [ -z "$prompt" ]; then
   case "$mode" in
     loop) prompt="migration/LOOP-PROMPT.md" ;;
@@ -236,7 +246,7 @@ fi
 # between. The prompt-side idle counter (.harness/state/idle-ticks) is the
 # designed termination path; the signature comparison below is a driver-side
 # backstop for a model that fails to keep that bookkeeping.
-max_ticks="${HARNESS_MAX_TICKS:-50}"
+max_ticks="${max_arg:-${HARNESS_MAX_TICKS:-50}}"
 idle=0; tick=0
 while :; do
   if [ "$tick" -ge "$max_ticks" ]; then
