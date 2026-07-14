@@ -138,6 +138,26 @@ fi
 
 echo
 echo "=== within-slice controls ==="
+runlog=.harness/state/runs.ndjson
+if [ -f "$runlog" ]; then
+  starts=$(grep -c '"event":"run.start"' "$runlog" 2>/dev/null || true)
+  ends=$(grep -c '"event":"run.end"' "$runlog" 2>/dev/null || true)
+  case "$starts" in ''|*[!0-9]*) starts=0 ;; esac
+  case "$ends" in ''|*[!0-9]*) ends=0 ;; esac
+  latest=$(grep '"event":"run.end"' "$runlog" 2>/dev/null | tail -n 1)
+  outcome=$(printf '%s' "$latest" | sed -n 's/.*"outcome":"\([^"]*\)".*/\1/p')
+  exit_code=$(printf '%s' "$latest" | sed -n 's/.*"exit_code":\([0-9][0-9]*\).*/\1/p')
+  duration=$(printf '%s' "$latest" | sed -n 's/.*"duration_s":\([0-9][0-9]*\).*/\1/p')
+  calls=$(printf '%s' "$latest" | sed -n 's/.*"tool_calls":\([0-9][0-9]*\).*/\1/p')
+  inflight=$((starts - ends)); [ "$inflight" -lt 0 ] && inflight=0
+  if [ "$ends" -gt 0 ]; then
+    echo "run journal   : $ends completed, $inflight interrupted/in-flight; latest=$outcome rc=$exit_code duration=${duration}s calls=$calls"
+  else
+    echo "run journal   : 0 completed, $inflight interrupted/in-flight in $runlog"
+  fi
+else
+  echo "run journal   : none yet (kick-loop has not started a tick)"
+fi
 telemetry=.harness/state/telemetry.ndjson
 if [ -f "$telemetry" ]; then
   calls=$(wc -l < "$telemetry" | tr -d '[:space:]')

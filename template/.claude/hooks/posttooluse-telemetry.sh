@@ -46,6 +46,8 @@ mkdir -p .harness/state/tool-stats 2>/dev/null || true
 tool_name=$(printf '%s' "$input" | tr '\n\r' '  ' \
   | sed -n 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 [ -z "$tool_name" ] && exit 0
+session_id=$(printf '%s' "$input" | tr '\n\r' '  ' \
+  | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
 # Extract a representative arg for fingerprinting. Different tools use
 # different input keys; try the common ones in order of specificity.
@@ -89,8 +91,10 @@ ts=$(date -u +%FT%TZ 2>/dev/null || echo now)
 # the \n\r -> space replacement above; escape backslash and double-quote).
 fp_esc=$(printf '%s' "$fingerprint" | sed 's/\\/\\\\/g; s/"/\\"/g')
 tn_esc=$(printf '%s' "$tool_name" | sed 's/\\/\\\\/g; s/"/\\"/g')
-printf '{"event":"tool.complete","ts":"%s","tool":"%s","fingerprint":"%s"}\n' \
-  "$ts" "$tn_esc" "$fp_esc" \
+run_esc=$(printf '%s' "${HARNESS_RUN_ID:-}" | sed 's/\\/\\\\/g; s/"/\\"/g')
+sid_esc=$(printf '%s' "$session_id" | sed 's/\\/\\\\/g; s/"/\\"/g')
+printf '{"event":"tool.complete","ts":"%s","run_id":"%s","session_id":"%s","tool":"%s","fingerprint":"%s"}\n' \
+  "$ts" "$run_esc" "$sid_esc" "$tn_esc" "$fp_esc" \
   >> "$tlog" 2>/dev/null || true
 
 # --- 2. Budget: per-session tool-call counter ---
