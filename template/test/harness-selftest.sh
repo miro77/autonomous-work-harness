@@ -292,14 +292,29 @@ printf 'edited\n' > src/a.txt
 exit 0
 FAKE
 chk "kick-loop: un-gated exit-0 run flagged 65" "$( KL >/dev/null 2>&1; echo $? )" 65
+grep -q '"event":"run.start"' .harness/state/runs.ndjson \
+  && ok "run journal: records attempt start" || no "run journal: records attempt start" "missing" "run.start"
+grep -q '"outcome":"ungated","exit_code":65' .harness/state/runs.ndjson \
+  && ok "run journal: classifies ungated exit" || no "run journal: classifies ungated exit" "missing" "ungated rc=65"
+chk "run journal: completed attempt has start/end pair" \
+  "$(grep -c '"event":"run.start"\|"event":"run.end"' .harness/state/runs.ndjson)" 2
 rm -rf .harness
 
 mkfake <<'FAKE'
 #!/usr/bin/env bash
+printf '{"session_id":"fake-session","tool_name":"Bash","tool_input":{"command":"gates"}}' \
+  | bash .claude/hooks/posttooluse-telemetry.sh >/dev/null 2>&1
 bash migration/tools/gates.sh >/dev/null 2>&1
 exit 0
 FAKE
 chk "kick-loop: gated exit-0 run returns 0" "$( KL >/dev/null 2>&1; echo $? )" 0
+grep -q '"outcome":"gate_covered","exit_code":0' .harness/state/runs.ndjson \
+  && ok "run journal: classifies gate-covered attempt" || no "run journal: classifies gate-covered attempt" "missing" "gate_covered rc=0"
+run_id=$(sed -n 's/.*"run_id":"\([^"]*\)".*/\1/p' .harness/state/runs.ndjson | head -n 1)
+grep -q "\"run_id\":\"$run_id\"" .harness/state/telemetry.ndjson \
+  && ok "run journal: tool telemetry correlates by run_id" || no "run journal: tool telemetry correlates by run_id" "missing" "$run_id"
+grep -q '"tool_calls":1' .harness/state/runs.ndjson \
+  && ok "run journal: captures per-attempt tool count" || no "run journal: captures per-attempt tool count" "missing" "tool_calls=1"
 rm -rf .harness
 
 mkfake <<'FAKE'
@@ -308,6 +323,8 @@ echo "you have reached your usage limit; resets at 3am"
 exit 1
 FAKE
 chk "kick-loop: usage limit on nonzero exit -> 75" "$( KL >/dev/null 2>&1; echo $? )" 75
+grep -q '"outcome":"usage_limit","exit_code":75' .harness/state/runs.ndjson \
+  && ok "run journal: classifies usage-limit pause" || no "run journal: classifies usage-limit pause" "missing" "usage_limit rc=75"
 rm -rf .harness
 
 mkfake <<'FAKE'
@@ -602,9 +619,11 @@ POSTTOOL(){ printf '%s' "$1" | bash .claude/hooks/posttooluse-telemetry.sh 2>/de
 R="$(mkrepo 'src')"; cd "$R"
 
 # Observability: a tool call is logged as structured JSON
-POSTTOOL '{"tool_name":"Edit","tool_input":{"file_path":"src/a.txt"}}' >/dev/null
+HARNESS_RUN_ID=run-test POSTTOOL '{"session_id":"session-test","tool_name":"Edit","tool_input":{"file_path":"src/a.txt"}}' >/dev/null
 [ -s .harness/state/telemetry.ndjson ] && ok "telemetry: logs tool call to telemetry.ndjson" || no "telemetry: logs tool call to telemetry.ndjson" "empty" "nonempty"
 grep -q '"tool":"Edit"' .harness/state/telemetry.ndjson && ok "telemetry: log entry has tool name" || no "telemetry: log entry has tool name" "missing" "Edit"
+grep -q '"run_id":"run-test"' .harness/state/telemetry.ndjson && ok "telemetry: log entry has run correlation id" || no "telemetry: log entry has run correlation id" "missing" "run-test"
+grep -q '"session_id":"session-test"' .harness/state/telemetry.ndjson && ok "telemetry: log entry has session id" || no "telemetry: log entry has session id" "missing" "session-test"
 
 # Budget: counter increments; warning injected when exceeded
 POSTTOOL '{"tool_name":"Bash","tool_input":{"command":"ls"}}' >/dev/null
@@ -763,6 +782,28 @@ chk "guard: read locked gates.sh allowed"         "$(GUARD 'cat migration/tools/
 chk "guard: exec gates.sh redirect elsewhere allowed" "$(GUARD 'bash migration/tools/gates.sh > /tmp/g.log')" 0
 chk "guard: gates.sh piped to tee elsewhere allowed"  "$(GUARD 'bash migration/tools/gates.sh 2>&1 | tee /tmp/g.log')" 0
 
+# DESTRUCTION of a locked file is a mutation. Blocking only writers left the
+# shortest bypass in the harness open: a Stop hook that is not on disk does not
+# run, so `rm` of the hook disabled enforcement outright without writing a byte.
+chk "guard: rm of locked Stop hook blocks"        "$(GUARD 'rm .claude/hooks/stop-require-gates.sh')" 2
+chk "guard: rm -rf of locked hooks dir blocks"    "$(GUARD 'rm -rf .claude/hooks/')" 2
+chk "guard: rm of locked gates.sh blocks"         "$(GUARD 'rm -f migration/tools/gates.sh')" 2
+chk "guard: git rm of locked hook blocks"         "$(GUARD 'git rm .claude/hooks/stop-require-gates.sh')" 2
+chk "guard: git checkout revert of locked gates blocks" "$(GUARD 'git checkout HEAD~1 -- migration/tools/gates.sh')" 2
+chk "guard: git restore of locked harness.env blocks"   "$(GUARD 'git restore migration/harness.env')" 2
+chk "guard: chmod -x on locked hook blocks"       "$(GUARD 'chmod -x .claude/hooks/stop-require-gates.sh')" 2
+chk "guard: rm of an UNprotected file allowed"    "$(GUARD 'rm src/scratch.txt')" 0
+
+# The frozen ORACLE was guarded only on the Edit/Write path — Bash never checked
+# it, so a redirect or an rm mutated the reference parity is measured against.
+chk "guard: redirect write into frozen oracle blocks" "$(GUARD 'echo x > legacy/src/x.cpp')" 2
+chk "guard: heredoc-style write to frozen blocks"     "$(GUARD 'cat > legacy/src/x.cpp')" 2
+chk "guard: rm -rf of frozen oracle blocks"           "$(GUARD 'rm -rf legacy/src')" 2
+chk "guard: sed -i on frozen oracle blocks"           "$(GUARD 'sed -i s/a/b/ legacy/src/x.cpp')" 2
+chk "guard: reading the frozen oracle allowed"        "$(GUARD 'cat legacy/src/x.cpp')" 0
+chk "guard: grepping the frozen oracle allowed"       "$(GUARD 'grep -rn foo legacy/src')" 0
+chk "guard: RUNNING the oracle allowed"               "$(GUARD './legacy/build/app --dump-fixtures')" 0
+
 # --- blanket staging guard (message masking, no quote-strip bypass) ---
 # JGUARD feeds raw JSON so payloads can contain escaped double quotes.
 JGUARD(){ printf '%s' "$1" | bash .claude/hooks/pretooluse-command-guard.sh >/dev/null 2>&1; echo $?; }
@@ -875,6 +916,13 @@ has(){ case "$2" in *"$1"*) ok "$3";; *) no "$3" "<missing>" "$1";; esac; }
 R="$(mkrepo 'src')"; cd "$R"
 out="$(bash migration/tools/doctor.sh 2>&1)"; chk "doctor: exits 0 on valid repo" "$?" 0
 has "proof: NONE"  "$out" "doctor: NONE before gate"
+mkdir -p .harness/state
+printf '%s\n' \
+  '{"event":"run.start","ts":"t1","run_id":"r1"}' \
+  '{"event":"run.end","ts":"t2","run_id":"r1","outcome":"usage_limit","exit_code":75,"duration_s":4,"tool_calls":9,"tree":"abc"}' \
+  > .harness/state/runs.ndjson
+out="$(bash migration/tools/doctor.sh 2>&1)"
+has "latest=usage_limit rc=75 duration=4s calls=9" "$out" "doctor: summarizes latest run journal entry"
 GATE
 out="$(bash migration/tools/doctor.sh 2>&1)"; has "proof: GATED" "$out" "doctor: GATED after gate"
 printf 'changed\n' > src/a.txt
