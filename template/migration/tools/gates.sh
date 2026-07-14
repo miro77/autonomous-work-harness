@@ -63,6 +63,12 @@ bash migration/tools/check-docs.sh CLAUDE.md AGENTS.md migration >&2 \
 bash migration/tools/check-frozen.sh >&2 \
   || fail "frozen oracle failed integrity check (migration/tools/check-frozen.sh) — the reference parity is measured against has moved, or was never baselined. No gate run is trustworthy until it is restored."
 
+# Hard rule 10, mechanically. A row may not become `audited-pass` on the board
+# unless the fresh-context auditor actually ran and recorded a pass for THIS code.
+# Prose asked for the audit; this checks it happened.
+bash migration/tools/check-audits.sh >&2 \
+  || fail "an audited-pass row is not backed by a fresh-context audit of the current code (migration/tools/check-audits.sh) — spawn the auditor, or record the row honestly as audited-fail"
+
 # ===== IN-PLACE ORACLE GATES (opt-in: HARNESS_ORACLE="baselines") ==========
 # For in-place migrations (docs/IN-PLACE-PROFILE.md): validate the status
 # board mechanically and enforce the captured-baseline oracle. No-op unless

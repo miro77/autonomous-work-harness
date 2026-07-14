@@ -43,3 +43,19 @@ Report every finding as:
 A criterion is met only if a real test proves it - "looks reasonable" and "the
 code clearly does it" are not pass criteria. End with a verdict: PASS (zero
 blockers) or FAIL (list blockers). You fix nothing.
+
+## Record your verdict — this is what makes the audit real
+
+The LAST thing you do, after you have finished reading the code and reached a
+verdict, is record it:
+
+```
+bash migration/tools/record-audit.sh <row-id> pass      # zero blockers
+bash migration/tools/record-audit.sh <row-id> fail      # any blocker
+```
+
+The gate refuses to let a row be marked `audited-pass` on the board without a
+matching record for the exact code now in the tree, so the row cannot be claimed
+before you have run. Record what you found, not what would be convenient — `fail`
+is a normal outcome, recorded as `audited-fail` on the board. Never record a
+verdict for code you did not read.

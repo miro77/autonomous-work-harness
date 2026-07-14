@@ -39,6 +39,12 @@ Steps — all of them, in order:
    evidence, and the new code paths. It reports every deviation with severity
    (blocker/minor). Repair blockers and re-audit, max 2 rounds; remaining
    blockers ⇒ status `audited-fail` with findings recorded.
+   The auditor records its own verdict (`record-audit.sh`), and `gates.sh`
+   refuses an `audited-pass` row without a matching record for the code now in
+   the tree. So you cannot write the status before the auditor returns — and if
+   you repair blockers afterwards, the code hash moves and the audit must be
+   re-run. Do not record the verdict yourself; that is the auditor's job, and
+   doing it for them is exactly the fabrication the check exists to stop.
 7. **Re-gate after repairs.** If step 6 (or the matrix-row update in step 8)
    changed any file since the last gate run, re-run `bash
    migration/tools/gates.sh` so the recorded proof covers the exact tree you

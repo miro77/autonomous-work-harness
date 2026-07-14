@@ -197,7 +197,12 @@ bridges compaction boundaries.
    `migrate ID: STATUS` (e.g. `migrate F03: audited-pass`). Never leave the
    tree dirty between slices — commit `audited-fail` states too.
 10. Parity audits are performed by a fresh-context subagent (`parity-auditor`)
-    that did not write the code.
+    that did not write the code. The auditor records its verdict itself
+    (`migration/tools/record-audit.sh`), and `gates.sh` refuses to let a row be
+    marked `audited-pass` without a matching record for the code currently in
+    the tree — so the status cannot be written before the audit returns, and a
+    code change after the audit invalidates it. Never record a verdict on the
+    auditor's behalf.
 11. A user-facing feature is not done until it is REACHABLE in the running app.
     When a slice ships a feature without wiring its entry point, or leaves a
     runtime stub, record it in [`migration/integration-ledger.md`](migration/integration-ledger.md)

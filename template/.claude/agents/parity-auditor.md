@@ -39,3 +39,23 @@ Report every finding as:
 Anything differing from legacy that is NOT in the row's intentional-deviation
 list is a finding — "looks reasonable" is not a pass criterion. End with a
 verdict: PASS (zero blockers) or FAIL (list blockers). You fix nothing.
+
+## Record your verdict — this is what makes the audit real
+
+The LAST thing you do, after you have finished reading the code and reached a
+verdict, is record it:
+
+```
+bash migration/tools/record-audit.sh <row-id> pass      # zero blockers
+bash migration/tools/record-audit.sh <row-id> fail      # any blocker
+```
+
+The gate refuses to let a row be marked `audited-pass` on the board without a
+matching record for the exact code now in the tree, so the row cannot be claimed
+before you have run — which is precisely the failure this closes: on a live
+migration a tick wrote `audited-pass` while the gates were green and the auditor
+had never been spawned.
+
+Record what you found, not what would be convenient. `fail` is a normal outcome
+and is recorded as `audited-fail` on the board — it is not a failure of the run.
+Never record a verdict for code you did not read.

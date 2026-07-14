@@ -1008,6 +1008,54 @@ sed -i 's|HARNESS_FROZEN="no/such/path"|HARNESS_FROZEN=""|' migration/harness.en
 chk "frozen-hash: empty HARNESS_FROZEN passes (in-place)" "$(FZ)" 0
 cd /; rm -rf "$R"
 
+# ==================================================== unskippable audit (rule 10)
+# The rule was prose: /migrate-slice ASKED for the auditor. On a live migration a
+# tick wrote audited-pass while the gates were green and no auditor had run.
+AUD(){ bash migration/tools/check-audits.sh >/dev/null 2>&1; echo $?; }
+# '#' delimiter: the row is made of '|' characters, so '|' cannot delimit the sed.
+setrow(){ sed -i "s#^| B01 |.*#| B01 | bootstrap | - | - | - | $1 | - | - |#" migration/parity-matrix.md; }
+
+R="$(mkrepo 'src migration .claude CLAUDE.md')"; cd "$R"
+chk "audits: untouched board passes"              "$(AUD)" 0
+chk "guard: direct write of an audit record blocks" "$(GUARD 'echo deadbeef pass > .harness/state/audits/B01')" 2
+chk "guard: rm of an audit record blocks"           "$(GUARD 'rm .harness/state/audits/B01')" 2
+
+# claiming audited-pass with no auditor having run
+setrow 'audited-pass'
+chk "audits: audited-pass with NO record fails"   "$(AUD)" 1
+GATE && no "gates: unaudited audited-pass fails the gate" "pass" "fail" || ok "gates: unaudited audited-pass fails the gate"
+
+# the auditor runs and records a pass for THIS code
+bash migration/tools/record-audit.sh B01 pass >/dev/null 2>&1
+chk "audits: recorded pass for current code passes" "$(AUD)" 0
+
+# a 'fail' verdict cannot be laundered into an audited-pass row
+bash migration/tools/record-audit.sh B01 fail >/dev/null 2>&1
+chk "audits: recorded FAIL vs audited-pass row fails" "$(AUD)" 1
+bash migration/tools/record-audit.sh B01 pass >/dev/null 2>&1
+chk "audits: back to pass"                        "$(AUD)" 0
+
+# auditing, then editing the code, invalidates the audit (the hash moves)
+printf 'changed after the audit\n' > src/a.txt
+chk "audits: code edited AFTER the audit fails"   "$(AUD)" 1
+bash migration/tools/record-audit.sh B01 pass >/dev/null 2>&1
+chk "audits: re-audit of the new code passes"     "$(AUD)" 0
+
+# bookkeeping edits must NOT invalidate an audit — otherwise writing the very row
+# the auditor just cleared would break its own record
+printf '\n<!-- ledger note -->\n' >> migration/integration-ledger.md
+chk "audits: ledger edit does not invalidate"     "$(AUD)" 0
+printf '\n<!-- adr note -->\n' >> migration/decisions.md
+chk "audits: decisions edit does not invalidate"  "$(AUD)" 0
+
+# once committed, the row is grandfathered: later slices legitimately move the
+# code hash, and re-checking old rows against it would fail every board forever
+git add -A >/dev/null 2>&1; git commit -qm "migrate B01: audited-pass" >/dev/null 2>&1
+rm -rf .harness/state/audits
+printf 'a later slice edits the code\n' > src/a.txt
+chk "audits: row audited-pass at HEAD is not re-checked" "$(AUD)" 0
+cd /; rm -rf "$R"
+
 echo "----------------------------------------"
 echo "harness self-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

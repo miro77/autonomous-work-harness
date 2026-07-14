@@ -33,6 +33,14 @@ if printf '%s' "$cmd" | grep -q 'gates-passed\.diffsha' \
   block "Blocked: writing the gate proof file directly. It is written only by gates.sh on a real pass. Run: bash migration/tools/gates.sh"
 fi
 
+# Same for the audit records. An audit record says a fresh-context auditor read
+# this exact code and passed it; hand-writing one is forging that. It is written
+# only by record-audit.sh, which the AUDITOR calls when it has actually finished.
+if printf '%s' "$cmd" | grep -q '\.harness/state/audits' \
+   && printf '%s' "$cmd" | grep -Eq '(>|\btee\b|\bcp\b|\bmv\b|\bdd\b|\binstall\b|\bln\b|\btruncate\b|\brm\b|\bsed\b[[:space:]]+(-i|--in-place))'; then
+  block "Blocked: writing or deleting an audit record directly. A record asserts that a fresh-context auditor read THIS code and passed it. It is written only by the auditor, via: bash migration/tools/record-audit.sh <row-id> pass|fail"
+fi
+
 # --- Protected paths: locked enforcement (HARNESS_LOCKED) + oracle (HARNESS_FROZEN)
 # Block Bash MUTATIONS of the harness's own gates/hooks/config so the agent cannot
 # neuter its own enforcement (e.g. `sed -i` gates.sh into a no-op, then record a
