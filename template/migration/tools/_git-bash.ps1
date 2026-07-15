@@ -127,7 +127,14 @@ function Invoke-HarnessBash {
         }
     }
 
-    $payload = 'exec ' + (ConvertTo-BashWords -Words $Command)
+    # Run .sh targets THROUGH bash rather than exec'ing the file: the repo
+    # stores the tools mode 644, which Git Bash happily execs (MSYS derives
+    # execute permission from the shebang) but real Linux does not — a bare
+    # `exec tool.sh` under Linux pwsh (CI) dies with "Permission denied".
+    $words = $Command
+    if ($words.Count -gt 0 -and $words[0] -match '\.sh$') { $words = @('bash') + $words }
+
+    $payload = 'exec ' + (ConvertTo-BashWords -Words $words)
     if ($MergeStderr) { $payload += ' 2>&1' }
     if ($DiscardStderr) { $payload += ' 2>/dev/null' }
 

@@ -919,12 +919,20 @@ chk "frozen: in-repo absolute locked path still blocks" "$(FROZEN "$R/.claude/ho
 chk "frozen: in-repo relative locked path still blocks" "$(FROZEN '.claude/hooks/stop-require-gates.sh')" 2
 # aliased spellings of an in-repo path must still be guarded: a logical-vs-
 # physical prefix mismatch (symlinked checkout) or dot-segments used to exit
-# 0 BEFORE any guard, silently disabling all of them.
-ln -s "$R" "$R.lnk"
-chk "frozen: symlink-aliased locked path still blocks" "$(FROZEN "$R.lnk/.claude/hooks/stop-require-gates.sh")" 2
-chk "frozen: symlink-aliased frozen path still blocks" "$(FROZEN "$R.lnk/legacy/src/A.java")" 2
+# 0 BEFORE any guard, silently disabling all of them. Guard the guard-test:
+# on Windows Git Bash without Developer Mode, `ln -s` silently COPIES instead
+# of linking, so the "alias" is a second real tree outside the repo and the
+# hook is CORRECT to allow it — skip (loudly) rather than fail on a platform
+# that cannot express the aliasing this test is about.
+ln -s "$R" "$R.lnk" 2>/dev/null || true
+if [ -L "$R.lnk" ]; then
+  chk "frozen: symlink-aliased locked path still blocks" "$(FROZEN "$R.lnk/.claude/hooks/stop-require-gates.sh")" 2
+  chk "frozen: symlink-aliased frozen path still blocks" "$(FROZEN "$R.lnk/legacy/src/A.java")" 2
+else
+  echo "SKIP: symlink-alias tests (this platform's ln -s does not create real symlinks)"
+fi
 chk "frozen: dot-segment absolute path still blocks"   "$(FROZEN "$R/./legacy/src/A.java")" 2
-rm -f "$R.lnk"
+rm -rf "$R.lnk"    # -r: where ln -s copied instead of linking, this is a directory
 cd /; rm -rf "$R"
 
 # ============================================================ telemetry: loop fingerprints
@@ -1145,7 +1153,9 @@ cd /; rm -rf "$R"
 # A fresh context of the SAME model is still the same model: the tick buys
 # independence from the conversation, not from the blind spot.
 R="$(mkrepo 'src')"; cd "$R"; mkdir -p .fakebin; FAKEBIN="$PWD/.fakebin"
-KL(){ ( PATH="$FAKEBIN:$PATH" bash migration/tools/kick-loop.sh "$@" ); }
+# KL() is already defined by the kick-loop section above; it reads $FAKEBIN at
+# call time, so re-pointing the variable is enough (a re-definition here trips
+# SC2218 at -S error and fails CI).
 
 # A fake claude that records every --model it is invoked with, leaves a VALID gate
 # proof, and changes nothing in scope — so the tick is gate-covered (rc 0) but
@@ -1234,8 +1244,8 @@ cd /; rm -rf "$R"
 # last SUCCESSFUL gate run — not HEAD. `git commit` is un-gated, so trusting
 # HEAD let write-row -> commit -> gate launder an unaudited audited-pass
 # (confirmed bypass; the HEAD fallback survives only for fresh clones).
-AUD(){ bash migration/tools/check-audits.sh >/dev/null 2>&1; echo $?; }
-setrow(){ sed -i "s#^| B01 |.*#| B01 | bootstrap | - | - | - | $1 | - | - |#" migration/parity-matrix.md; }
+# AUD()/setrow() are already defined by the unskippable-audit section above
+# (re-defining them trips SC2218 at -S error and fails CI).
 R="$(mkrepo 'src migration .claude CLAUDE.md')"; cd "$R"
 GATE   # records the proof AND the board snapshot
 [ -f .harness/state/gates-passed.parity-matrix.md ] \
