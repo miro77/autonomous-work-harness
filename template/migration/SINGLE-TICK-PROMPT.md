@@ -111,8 +111,12 @@ AUTONOMY — a tick must finish without a human. It runs unattended, so:
 -   Never block on an interactive command. Build/run/test commands run
     non-interactively — capture output to a file and read it back; do not leave a
     command waiting at a foreground prompt. A command that prompts for approval
-    every tick is a permissions gap to fix in `.claude/settings.json`
-    (`permissions.allow`), not something to wait on.
+    every tick is a permissions gap only the OPERATOR can close —
+    `.claude/settings.json` is HARNESS_LOCKED, so do not try to edit it
+    yourself. Work around the command this tick if you can; either way record
+    the missing `permissions.allow` rule (a `## PROPOSAL` in
+    migration/PROPOSED-GATE-CHANGES.md, or the HANDOFF notes) so a human adds
+    it before the next run.
 
 IDLE TRACKING — cross-tick memory lives in `.harness/state/idle-ticks`:
 if this tick advanced work (a matrix row changed status or was split, or

@@ -29,9 +29,11 @@ driver with three modes:
   without writing `HANDOFF.md`.
 - **`--drive --review`** — same as `--drive`, but pauses after any tick whose
   commit is an `audited-fail` or a row-split — the human-in-the-loop gate.
-  On a TTY it waits for Enter (press `s` to skip future reviews); headless it
-  logs the pause and continues. Use interactively when you want to inspect
-  failed slices before the loop advances.
+  On a TTY it waits for Enter (press `s` to skip future reviews); **headless
+  it stops with exit `70`** so a scheduler cannot silently sail past the
+  review point — state is checkpointed on disk, re-run to continue. Use
+  `--review-log-only` instead if a headless run should only log the review
+  point and keep going (for schedulers that alert on logs).
 - **`--tick`** — exactly one fresh-context slice, then return. Useful for
   cautious supervision (inspect between slices) or very tight schedules.
 - **default** — one headless run of [`LOOP-PROMPT.md`](LOOP-PROMPT.md): a
@@ -44,12 +46,15 @@ All modes share the same behavior around completion and limits:
 - A run that hits the usage limit exits `75` and stops; the next scheduled run
   after the reset continues. A lock prevents overlapping runs from stacking.
 - A run that finishes but leaves an end state needing inspection exits `65`:
-  the tree is not covered by a gate proof, or (`--drive`) `HANDOFF.md` was
-  written but never committed. Inspect before trusting it.
+  the tree is not covered by a gate proof, or `HANDOFF.md` exists but is not a
+  valid termination record (untracked or modified, a bad `STATUS:` first line,
+  boards inconsistent — `check-complete.sh` prints why). Inspect before
+  trusting it.
 
 Requires the Claude Code CLI on `PATH`. `kick-loop.sh --check` reports whether
-there is work to resume (`STATE: resume` / `STATE: done`) without invoking
-anything — handy for a scheduler guard.
+there is work to resume (`STATE: resume`, `STATE: done:<STATUS>` — e.g.
+`done:COMPLETE` — or `STATE: invalid-handoff`) without invoking anything —
+handy for a scheduler guard.
 
 ## ⚠️ The orphaned tick — read this before you ever Ctrl-C the driver
 

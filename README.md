@@ -29,12 +29,15 @@ first one work:
 template/                 # copy this into your target repo
 ├── CLAUDE.md             # the operating contract (hard rules, done criteria)
 ├── CLAUDE-feature.md     # alternate contract for spec-driven feature work
+├── settings-permissions.patch # unattended-run permissions: Edit/Write + fixture
+│                         #   generator allows (fill <TARGET_TREE> etc., git apply)
 ├── .claude/
 │   ├── settings.json     # wires the hooks (PreToolUse, PostToolUse, Stop, PreCompact)
+│   │                     #   + allow-lists the harness tools
 │   ├── hooks/            # stop-require-gates, frozen-legacy, command-guard,
 │   │                     #   precompact-checkpoint, posttooluse-telemetry
 │   ├── agents/           # legacy-analyst, parity-auditor, spec-auditor, coder
-│   └── commands/         # /migrate-slice, /parity-check
+│   └── commands/         # /migrate-slice, /feature-slice, /parity-check
 └── migration/
     ├── harness.env       # the ONE place you configure scope + frozen paths + budget
     ├── PLAN.md           # phased strategy (bootstrap → core → persistence → UI)
@@ -49,7 +52,10 @@ template/                 # copy this into your target repo
     └── tools/            # gates.sh, record-gates.sh, working-tree-hash.sh,
                           #   doctor.sh, check-docs.sh, check-stubs.sh,
                           #   kick-loop.sh, persist-state.sh, read-state.sh,
-                          #   benchmark.sh, gui-capture.py, gui-compare.py
+                          #   benchmark.sh, gui-capture.py, gui-compare.py,
+                          #   and the other check-*/record-* enforcement scripts
+                          #   (frozen oracle, audits, matrix, baselines,
+                          #   holdout, completion)
 ```
 
 **Docs:** [GETTING-STARTED.md](GETTING-STARTED.md) · [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) · [docs/ADAPTING.md](docs/ADAPTING.md) · [docs/IN-PLACE-PROFILE.md](docs/IN-PLACE-PROFILE.md) · [docs/FEATURE-PROFILE.md](docs/FEATURE-PROFILE.md)
@@ -62,8 +68,12 @@ Windows (or `cp -R template/. .` — NOT
 `cp -r template/* .`: the `*` glob drops the dot-dir `.claude/` with every
 hook, agent, and command), edit `migration/harness.env` (scope + frozen
 paths) and the
-PROJECT GATES block in `migration/tools/gates.sh`, fill the `<...>` placeholders
-in `CLAUDE.md`/`PLAN.md`, then run `bash migration/tools/kick-loop.sh --drive`
+PROJECT GATES block in `migration/tools/gates.sh`, record the frozen-oracle
+baseline as a human (`bash migration/tools/check-frozen.sh --record` — gates
+fail closed until it exists), fill the `<...>` placeholders
+in `CLAUDE.md`/`PLAN.md`, pre-authorize your build/test commands and the
+agent's Edit/Write scopes (`settings-permissions.patch`), then run
+`bash migration/tools/kick-loop.sh --drive`
 (one slice per fresh context, back-to-back) — or paste
 `migration/LOOP-PROMPT.md` into a fresh Claude Code session for a single
 self-paced run.

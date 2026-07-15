@@ -43,13 +43,20 @@ ticks, not the conversation. Two consequences to accept up front:
   unit, and a fresh window is the most budget you can give it. If a slice
   reliably exhausts one, the slice is too big — split the row.
 
-**Before first run**, pre-authorize the commands each tick repeats — the harness
-tools (`bash migration/tools/gates.sh`, `kick-loop.sh`, `doctor.sh`,
-`check-docs.sh`) and your stack's build/test/format commands — in
-`.claude/settings.json` (`permissions.allow`). A permission dialog parks an
-unattended loop on every tick no matter what this prompt says; wording cannot
-dismiss it, only an allow-list can. **Subagents inherit the same allow-list**, so
-a gap parks a delegated tick just as hard.
+**Before first run**, close the permission gaps. The shipped
+`.claude/settings.json` already allow-lists the harness's own tools
+(`gates.sh`, `kick-loop.sh`, `doctor.sh`, `check-docs.sh`,
+`working-tree-hash.sh`, `check-complete.sh`, `check-frozen.sh`,
+`record-audit.sh`, and the state tools); what it cannot know is your stack.
+Add to `permissions.allow`: your build/test/format commands (the ones every
+tick repeats), and Edit/Write rules for the target tree and `migration/` —
+either by filling the `<TARGET_TREE>`/`<FIXTURE_GENERATOR>`/
+`<RUN_FIXTURE_GENERATOR>` placeholders in the shipped
+`settings-permissions.patch` and running `git apply settings-permissions.patch`
+from the repo root, or by hand-editing `.claude/settings.json`. A permission
+dialog parks an unattended loop on every tick no matter what this prompt says;
+wording cannot dismiss it, only an allow-list can. **Subagents inherit the same
+allow-list**, so a gap parks a delegated tick just as hard.
 
 **`/loop` availability:** the prompt below opens with `/loop`, a scheduling
 skill not every Claude Code install ships. If yours reports an unknown command,
@@ -126,8 +133,9 @@ Each tick:
    contexts, and the auditor still did not write the code, so the audit rule holds.
 
 4. **VERIFY FROM DISK — a subagent's report is a claim, not proof.** Before
-   accepting the tick: `git status --short` is clean; the last commit is the
-   expected `<id>: <status>` subject; the status-board row shows that status; and
+   accepting the tick: `git status --short` is clean; the last commit has the
+   expected subject (`migrate <id>: <status>` — `feat <id>: <status>` in the
+   feature profile); the status-board row shows that status; and
    re-run `bash migration/tools/working-tree-hash.sh` — if files you and the
    subagent did not touch changed, a second writer appeared mid-tick, so treat it
    as step 1 and STOP.

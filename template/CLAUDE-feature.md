@@ -67,9 +67,10 @@ as a security boundary. Two consequences you must respect rather than route arou
 - If the hash tool is broken/missing, the Stop hook fails **closed** (challenges
   once). A red or missing tool means stop and fix it, not proceed.
 - The recorded-checkpoint escape is narrow: the subject must be
-  `migrate <id>: audited-fail...` or `migrate <id>: split into sub-slices...`,
-  the parent tree must match the last gate proof, and the checkpoint commit may
-  touch only migration bookkeeping. It exists so a row can be recorded honestly
+  `feat <id>: audited-fail...` or `feat <id>: split into sub-slices...`
+  (matching hard rule 9's commit format; the hook also accepts the migration
+  profile's `migrate <id>: ...` spelling), the parent tree must match the last
+  gate proof, and the checkpoint commit may touch only migration bookkeeping. It exists so a row can be recorded honestly
   without pretending the current tree is gated. Treat every `audited-fail`
   commit as needing human review (`kick-loop.sh --drive --review` pauses there),
   never as gated work.

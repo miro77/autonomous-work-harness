@@ -39,7 +39,7 @@ Everything below applies to both unless noted.
 | Stop the port from CALLING the oracle (optional) | [`migration/harness.env`](../template/migration/harness.env) → `HARNESS_LINKAGE_SCAN` | your TARGET source paths. A port that shells out to the legacy binary passes every parity fixture while migrating nothing. Scan only the new tree — `migration/` and the docs name the oracle legitimately |
 | The actual gates | [`migration/tools/gates.sh`](../template/migration/tools/gates.sh) → PROJECT GATES block | your format-check + static analysis + full test suite |
 | Command guards | [`.claude/hooks/pretooluse-command-guard.sh`](../template/.claude/hooks/pretooluse-command-guard.sh) | your test-filter + dep-add patterns (uncomment/adapt) |
-| The contract & rules | [`template/CLAUDE.md`](../template/CLAUDE.md) | fill `<...>`; keep the 10 hard rules |
+| The contract & rules | [`template/CLAUDE.md`](../template/CLAUDE.md) | fill `<...>`; keep the hard rules intact (rule 11 — reachability — is machine-enforced by `check-complete.sh`) |
 | Phased plan | [`migration/PLAN.md`](../template/migration/PLAN.md) | your module dependency order |
 | Oracle run recipe | [`migration/legacy-runtime.md`](../template/migration/legacy-runtime.md) | your build/run/capture commands |
 

@@ -119,7 +119,8 @@ must respect rather than route around:
   gates concurrently with a build sharing the same build dirs, and never treat
   the release as permission to skip the gate on the final tree.
 - The recorded-checkpoint escape is narrow: the subject must be
-  `migrate <id>: audited-fail...` or `migrate <id>: split into sub-slices...`,
+  `migrate <id>: audited-fail...` or `migrate <id>: split into sub-slices...`
+  (the hook also accepts the feature profile's `feat <id>: ...` spelling),
   the parent tree must match the last gate proof, and the checkpoint commit may
   touch only migration bookkeeping. It exists so a row can be recorded honestly
   without pretending the current tree is gated. Treat every `audited-fail`

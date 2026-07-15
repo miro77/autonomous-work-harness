@@ -397,10 +397,12 @@ Full spec: migration/SPEC.md"></textarea>
   // stays identical to the canonical README prompts.
   var MODEL_SPLIT =
     "\n\nModel strategy (split): run implementation slices on Sonnet — set model to\n" +
-    "sonnet in settings.json, or pass --model sonnet to the driver. Keep the\n" +
-    "parity-auditor, spec-auditor and legacy-analyst subagents pinned to Opus (the\n" +
-    "model: field in .claude/agents/*.md) so the fresh-context audit stays sharp. Run\n" +
-    "Phase 0 — inventory, slicing, matrix — once on Opus (--model opus) before driving.";
+    "sonnet in settings.json (kick-loop.sh has no --model flag; its only model switch\n" +
+    "is HARNESS_ESCALATE_MODEL in migration/harness.env, which escalates a stuck tick\n" +
+    "to a different model). Keep the parity-auditor, spec-auditor and legacy-analyst\n" +
+    "subagents pinned to Opus (the model: field in .claude/agents/*.md) so the\n" +
+    "fresh-context audit stays sharp. Run Phase 0 — inventory, slicing, matrix — once\n" +
+    "in a session started with `claude --model opus` before driving.";
 
   var out = document.getElementById("out");
 
