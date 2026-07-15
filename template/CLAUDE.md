@@ -117,7 +117,12 @@ must respect rather than route around:
   suite's build directories, that challenge-then-release is the designed path:
   let the background step finish, then gate BEFORE the slice commit. Never run
   gates concurrently with a build sharing the same build dirs, and never treat
-  the release as permission to skip the gate on the final tree.
+  the release as permission to skip the gate on the final tree. This
+  wait-for-background pattern assumes an INTERACTIVE session (one that resumes
+  when background work completes). A headless `--drive` tick or a delegated
+  subagent has no later turn: it must run the gate to completion within the
+  turn — see the AUTONOMY rules in
+  [`migration/SINGLE-TICK-PROMPT.md`](migration/SINGLE-TICK-PROMPT.md).
 - The recorded-checkpoint escape is narrow: the subject must be
   `migrate <id>: audited-fail...` or `migrate <id>: split into sub-slices...`
   (the hook also accepts the feature profile's `feat <id>: ...` spelling),

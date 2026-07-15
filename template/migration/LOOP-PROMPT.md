@@ -121,9 +121,11 @@ Each tick:
    > run `bash migration/tools/gates.sh`, spawn the fresh-context auditor (it must
    > not be you) to audit, repair blockers, re-gate so the recorded proof covers
    > the exact tree you commit, update the row, and make the single commit. Leave
-   > the tree CLEAN — commit audited-fail states too. Follow the AUTONOMY rule:
+   > the tree CLEAN — commit audited-fail states too. Follow the AUTONOMY rules:
    > never ask a question, record assumptions in decisions.md as `status: assumed`
-   > and proceed.
+   > and proceed. Run gates.sh to COMPLETION within your turn — you are a
+   > one-shot agent with no later turn, so a backgrounded gate run is orphaned
+   > and your tick lands nothing.
    >
    > Report back ONLY: row id, final status, commit sha, files changed, and any
    > blocker or recorded assumption. Do NOT paste code, diffs, fixture contents,

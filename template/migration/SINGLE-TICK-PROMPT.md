@@ -110,7 +110,21 @@ AUTONOMY — a tick must finish without a human. It runs unattended, so:
     is invisible), and proceed.
 -   Never block on an interactive command. Build/run/test commands run
     non-interactively — capture output to a file and read it back; do not leave a
-    command waiting at a foreground prompt. A command that prompts for approval
+    command waiting at a foreground prompt.
+-   Run `gates.sh` (and anything else the tick's commit depends on) to
+    COMPLETION within this turn — never launch it in the background and end the
+    turn to "wait for the notification." A tick has no later turn to receive
+    one: in `--drive` (headless `claude -p`) the session is one-shot, and a
+    delegated subagent tick ends when its report does. A backgrounded gate run
+    is orphaned, no audit or commit happens, and the driver halts on the
+    un-checkpointed dirty tree. (This really happened — twice in a row, on the
+    same slice.) The non-interactive guidance above means
+    capture-and-poll-to-completion, NOT background-and-end-the-turn: run the
+    gate in the foreground, or detached with its output captured and polled
+    until it exits, BEFORE the audit and the commit. Only an interactive
+    session resumes on background completion, and a tick must never assume it
+    is in one.
+-   A command that prompts for approval
     every tick is a permissions gap only the OPERATOR can close —
     `.claude/settings.json` is HARNESS_LOCKED, so do not try to edit it
     yourself. Work around the command this tick if you can; either way record

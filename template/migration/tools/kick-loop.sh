@@ -286,6 +286,7 @@ run_once(){
     if [ -f "$verifier" ]; then
       if ! printf '{"stop_hook_active":false}' | bash "$verifier" >/dev/null 2>&1; then
         echo "kick-loop: run finished (exit 0) but the tree is NOT covered by a gate proof (Stop verifier blocked) — inspect before trusting it." >&2
+        echo "kick-loop: a common cause: the tick launched gates.sh in the BACKGROUND and ended its turn — a headless tick never resumes, so the gate run was orphaned (see AUTONOMY in migration/SINGLE-TICK-PROMPT.md)." >&2
         final_rc=65; outcome="ungated"
       fi
     fi
