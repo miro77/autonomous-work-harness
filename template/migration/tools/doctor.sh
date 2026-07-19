@@ -116,6 +116,15 @@ if [ -f "$_settings" ]; then
   else
     echo "permissions  : configured gate commands look allow-listed (no obvious parking risk)"
   fi
+  # DEAD Write() allow rules. Claude Code ignores `Write(path)` in permissions.allow
+  # ("not matched by file permission checks") and warns on every tick — `Edit(path)`
+  # is what grants file writes (it covers Edit AND Write). A scope granted ONLY via
+  # Write() therefore still parks on a prompt. Flag any Write() rule so it is fixed
+  # to Edit() before an unattended run (the exact parking a real --drive run hit).
+  _wrules="$(grep -oE '"Write\([^"]*\)"' "$_settings" 2>/dev/null | tr '\n' ' ')"
+  if [ -n "$_wrules" ]; then
+    echo "permissions  : $_settings has Write() allow rule(s) — $_wrules— which Claude Code IGNORES (it warns every tick, and a path granted only via Write() still prompts). Replace each with the Edit() form (Edit covers all file-editing tools): e.g. \"Edit(package.json)\"."
+  fi
 fi
 
 # Runtime-stub gate + integration ledger (reachability tracking).

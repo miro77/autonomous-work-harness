@@ -351,10 +351,12 @@ Full spec: migration/SPEC.md"></textarea>
 
   var PERMS =
     "- PERMISSIONS (this is what silently PARKS an unattended run): apply\n" +
-    "  settings-permissions.patch with <TARGET_TREE> = your new source dir, and\n" +
-    "  ALSO allow-list your build/test tool for DIRECT use (Bash(cargo:*),\n" +
-    "  Bash(npm:*), Bash(go:*), …) and any ROOT manifest outside the target tree\n" +
-    "  (Cargo.toml, package.json, go.mod, pyproject.toml). Run\n" +
+    "  settings-permissions.patch with <TARGET_TREE> = your new source dir. Use\n" +
+    "  Edit(path) rules ONLY — Edit covers every file-editing tool; a Write(path)\n" +
+    "  rule is IGNORED by Claude Code (it warns each tick and the path still\n" +
+    "  prompts). ALSO allow-list your build/test tool for DIRECT use (Bash(cargo:*),\n" +
+    "  Bash(npm:*), Bash(go:*), …) and any ROOT manifest outside the target tree via\n" +
+    "  Edit(package.json)/Edit(Cargo.toml)/Edit(go.mod). Run\n" +
     "  `bash migration/tools/doctor.sh` and clear every warning it prints.\n";
 
   var CHECKPOINT =

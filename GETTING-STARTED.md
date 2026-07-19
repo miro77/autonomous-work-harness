@@ -127,17 +127,20 @@ tree the agent actually writes.** Add those BEFORE any unattended run — a
 headless tick (`claude -p`, which is what `kick-loop.sh` runs) cannot show a
 permission dialog, so a missing rule parks or fails the run instead of asking.
 
-Two ways to add the Edit/Write (and fixture-generator) rules:
+Use `Edit(path)` rules, **not** `Write(path)`: Claude Code's file-permission
+checks only honor `Edit(path)`, and it covers *every* file-editing tool
+(Edit, Write, MultiEdit). A `Write(path)` allow rule is silently ignored — it
+warns on every tick and the path still prompts. Two ways to add the rules:
 
 - **Apply the shipped patch.** Fill the `<TARGET_TREE>`,
   `<FIXTURE_GENERATOR>`, `<RUN_FIXTURE_GENERATOR>`, and `<BUILD_TEST_CMD>`
   placeholders in `settings-permissions.patch`, then from the repo root:
-  `git apply settings-permissions.patch`. It adds Edit/Write allows for
+  `git apply settings-permissions.patch`. It adds `Edit(...)` allows for
   `migration/` and your target tree, a Bash allow for the fixture generator,
   and a Bash allow for your build/test tool (`<BUILD_TEST_CMD>` → e.g.
   `cargo`, `npm`, `go`).
 - **Or hand-edit** `permissions.allow` in `.claude/settings.json` to the same
-  effect.
+  effect (again, `Edit(...)` rules only).
 
 Two easy-to-miss cases `doctor.sh` now flags for you:
 
@@ -149,8 +152,8 @@ Two easy-to-miss cases `doctor.sh` now flags for you:
 - **Root manifests live OUTSIDE your target tree.** `Edit(<TARGET_TREE>/**)`
   does not cover a repo-root `Cargo.toml` / `package.json` / `go.mod` /
   `pyproject.toml`, so creating or editing it parks the loop. Either add an
-  explicit `Edit`/`Write` rule for the manifest, or put your target crate in a
-  subdirectory so one glob covers it.
+  explicit `Edit(package.json)` (etc.) rule for the manifest, or put your target
+  crate in a subdirectory so one glob covers it.
 
 Do this as a human, or during the install session: `.claude/settings.json` is
 `HARNESS_LOCKED`, so once the hooks are armed the agent cannot widen its own

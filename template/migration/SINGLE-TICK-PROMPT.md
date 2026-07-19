@@ -123,7 +123,12 @@ AUTONOMY — a tick must finish without a human. It runs unattended, so:
     gate in the foreground, or detached with its output captured and polled
     until it exits, BEFORE the audit and the commit. Only an interactive
     session resumes on background completion, and a tick must never assume it
-    is in one.
+    is in one. Concretely FORBIDDEN in a tick: "arm a Monitor / background task
+    and end the turn," "stand by for the terminal event," "wait for the
+    completion notification" — a one-shot tick never gets that notification, so
+    the turn must not end until the gate has actually finished and you have read
+    its result. If a build is genuinely long, poll its captured log in a loop
+    inside this same turn; do not yield.
 -   A command that prompts for approval
     every tick is a permissions gap only the OPERATOR can close —
     `.claude/settings.json` is HARNESS_LOCKED, so do not try to edit it

@@ -1229,6 +1229,15 @@ json.dump(d, open(p,"w"), indent=2)
 PY
 out="$(bash migration/tools/doctor.sh 2>&1)"
 has "permissions  : configured gate commands look allow-listed" "$out" "doctor: clears once gate command is allow-listed"
+# dead Write() allow rule (Claude Code ignores it; Edit() is the working form)
+python3 - <<'PY'
+import json
+p=".claude/settings.json"; d=json.load(open(p))
+d["permissions"]["allow"].append("Write(package.json)")
+json.dump(d, open(p,"w"), indent=2)
+PY
+out="$(bash migration/tools/doctor.sh 2>&1)"
+has 'Write() allow rule' "$out" "doctor: flags a dead Write() allow rule"
 cd /; rm -rf "$R"
 
 # ==================================================== frozen-oracle integrity
