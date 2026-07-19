@@ -187,6 +187,26 @@ chk "docgate: broken anchor fails"           "$(DOCS docgate-fixtures)" 1
 # newline-separated, not concatenated)
 printf '# One\n## Two Words\n### Three\n[a](#two-words)\n' > docgate-fixtures/good.md
 chk "docgate: anchor to later heading passes (multi-heading)" "$(DOCS docgate-fixtures)" 0
+
+# line references: `path:N` / `path:N-M` must point at lines that EXIST (the
+# hallucinated/stale file:line that names a real file but a bad range).
+printf 'a\nb\nc\nd\ne\n' > docgate-fixtures/code.txt      # 5 lines
+printf 'ok `docgate-fixtures/code.txt:3`\n'   > docgate-fixtures/good.md
+chk "docgate: valid single line ref passes"   "$(DOCS docgate-fixtures)" 0
+printf 'ok `docgate-fixtures/code.txt:1-5`\n' > docgate-fixtures/good.md
+chk "docgate: valid line range passes"        "$(DOCS docgate-fixtures)" 0
+printf 'x `docgate-fixtures/code.txt:6`\n'    > docgate-fixtures/good.md
+chk "docgate: single line past EOF fails"     "$(DOCS docgate-fixtures)" 1
+printf 'x `docgate-fixtures/code.txt:2-9`\n'  > docgate-fixtures/good.md
+chk "docgate: range end past EOF fails"        "$(DOCS docgate-fixtures)" 1
+printf 'x `docgate-fixtures/code.txt:4-2`\n'  > docgate-fixtures/good.md
+chk "docgate: inverted range (start>end) fails" "$(DOCS docgate-fixtures)" 1
+printf 'x `docgate-fixtures/code.txt:0`\n'    > docgate-fixtures/good.md
+chk "docgate: line 0 fails"                    "$(DOCS docgate-fixtures)" 1
+printf 'time `12:30`, url `http://h:80/x`\n'  > docgate-fixtures/good.md
+chk "docgate: timestamp/url:port not flagged" "$(DOCS docgate-fixtures)" 0
+printf 'x `docgate-fixtures/missing.txt:9`\n' > docgate-fixtures/good.md
+chk "docgate: unresolved path not range-checked" "$(DOCS docgate-fixtures)" 0
 rm -rf docgate-fixtures
 cd /; rm -rf "$R"
 

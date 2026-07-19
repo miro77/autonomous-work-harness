@@ -2,8 +2,12 @@
 # Doc-gate: every internal Markdown reference must resolve. For each relative
 # link [text](target) (skipping http/https/mailto and <placeholder> targets),
 # the target file must exist (resolved relative to the linking file) and any
-# #anchor must match a heading slug in that file. Catches broken cross-references
-# and stale anchors — the drift that makes docs quietly lie.
+# #anchor must match a heading slug in that file. Inline-code `path` references
+# are checked repo-wide, and inline `path:N` / `path:N-M` LINE references are
+# checked in both modes against the cited file's actual length (N>=1, N<=M,
+# M<=lines) whenever the file resolves. Catches broken cross-references, stale
+# anchors, and hallucinated/stale file:line ranges — the drift that makes docs
+# quietly lie.
 #
 #   check-docs.sh                 # scan every tracked/untracked .md in the repo
 #   check-docs.sh PATH [PATH...]  # scan only .md under the given files/dirs
@@ -149,6 +153,7 @@ for f in "${MD[@]:-}"; do
     case "$tok" in
       migration/HANDOFF.md) continue ;;                    # written at termination
       migration/frozen-baseline.sha) continue ;;           # recorded once at bootstrap
+      migration/locked-baseline.sha) continue ;;           # recorded once at bootstrap
       migration/reference/*|migration/fixtures/*) continue ;;  # runtime-populated
     esac
     if ! printf '%s\n' "${TRACKED[@]}" | grep -qE "(^|/)$(esc "$tok")($|/)"; then
@@ -157,6 +162,52 @@ for f in "${MD[@]:-}"; do
   done < <(spans_of "$f")
 done
 fi
+
+# Inline-code LINE references: a `path:N` or `path:N-M` span must point at lines
+# that actually EXIST. The path-existence scan above skips anything with a colon,
+# so a stale/hallucinated range (`engine/lcg.cpp:120-145` naming a real file but a
+# range past its end) sails through today — the file:line drift that Claude Code
+# references invite. Unlike the path scan, this runs in BOTH modes: it fires only
+# when the cited file RESOLVES in this repo, so a consumer doc citing an unshipped
+# path is simply not range-checked (no false positive on installed-but-absent
+# paths — the reason the path scan is repo-wide only).
+for f in "${MD[@]:-}"; do
+  [ -n "$f" ] && [ -f "$f" ] || continue
+  dir=$(dirname "$f")
+  while IFS= read -r tok; do
+    [ -z "$tok" ] && continue
+    case "$tok" in *'://'*) continue ;; esac        # a URL:port is not a code ref
+    # Shape: PATH:START or PATH:START-END, PATH containing a '/' (like the path
+    # scan, a bare word:N such as a `12:30` timestamp is not a code reference).
+    printf '%s' "$tok" | grep -qE '^.+/[^:[:space:]]*:[0-9]+(-[0-9]+)?$' || continue
+    pathpart=${tok%:*}; spec=${tok##*:}
+    start=${spec%%-*}; end=""; case "$spec" in *-*) end=${spec#*-} ;; esac
+    # Resolve pathpart to a single file: root-relative, then relative to the doc,
+    # then a UNIQUE path-segment suffix among tracked files. Unresolved/ambiguous
+    # -> skip (path existence is the scan above's job; a range needs one file).
+    if [ "$dir" = "." ]; then cand="$pathpart"; else cand="$dir/$pathpart"; fi
+    cand="$(norm "$cand")"
+    tf=""
+    if [ -f "$pathpart" ]; then tf="$pathpart"
+    elif [ -f "$cand" ]; then tf="$cand"
+    else
+      matches="$(printf '%s\n' "${TRACKED[@]}" | grep -E "(^|/)$(esc "$pathpart")\$")"
+      [ "$(printf '%s\n' "$matches" | grep -c .)" = "1" ] && tf="$matches"
+    fi
+    [ -n "$tf" ] && [ -f "$tf" ] || continue
+    # awk NR, not `wc -l`: wc undercounts a file with no trailing newline by one.
+    lc="$(awk 'END{print NR}' "$tf" 2>/dev/null)"; [ -n "$lc" ] || lc=0
+    if [ "$start" -lt 1 ]; then
+      note "$f -> \`$tok\`  (line $start is invalid; lines start at 1)"
+    elif [ -n "$end" ] && [ "$start" -gt "$end" ]; then
+      note "$f -> \`$tok\`  (start line $start is after end line $end)"
+    elif [ -n "$end" ] && [ "$end" -gt "$lc" ]; then
+      note "$f -> \`$tok\`  (line $end exceeds $tf's $lc line(s))"
+    elif [ -z "$end" ] && [ "$start" -gt "$lc" ]; then
+      note "$f -> \`$tok\`  (line $start exceeds $tf's $lc line(s))"
+    fi
+  done < <(spans_of "$f")
+done
 
 echo "----------------------------------------"
 if [ "$fails" -eq 0 ]; then echo "doc-gate: all internal Markdown references resolve"; else echo "doc-gate: $fails broken reference(s)"; fi
